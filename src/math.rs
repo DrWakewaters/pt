@@ -211,7 +211,79 @@ pub fn pick_reflection_lambertian_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, m
 }
 
 #[inline(always)]
-pub fn dfg(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], a: f64, eta_2: f64, ks: f64) -> f64 {
+pub fn pick_reflection_from_brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64, pcg: &mut Pcg32) -> [f64; 3] {
+	let r_u32: u32 = pcg.gen();
+	let r_f64 = (r_u32 as f64)/(<u32>::max_value() as f64);
+	if r_f64 < ks {
+		return pick_reflection_specular(wi, wo, n, maximum_specular_angle, eta_2, ks, pcg);
+	}
+	pick_reflection_lambertian(n, pcg)
+}
+
+pub fn pick_reflection_specular(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64, pcg: &mut Pcg32) -> [f64; 3] {
+	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
+	// Find phi: the angle we will rotate wo away from specular_direction, and theta: the angle we will then rotate wo around specular_direction.
+	let rx_u32: u32 = pcg.gen();
+	let mut rx_f64 = (rx_u32 as f64)/(<u32>::max_value() as f64);
+	let ry_u32: u32 = pcg.gen();
+	let mut ry_f64 = (ry_u32 as f64)/(<u32>::max_value() as f64);
+	if ry_f64 > rx_f64 {
+		let tmp = ry_f64;
+		ry_f64 = rx_f64;
+		rx_f64 = tmp;
+	}
+	let mut b = maximum_specular_angle;
+	let angle_to_surface = PI/2.0 - dot(n, specular_direction);
+	if b > angle_to_surface {
+		b = angle_to_surface;
+	}
+	let phi = b*rx_f64;
+	let r_theta_u32: u32 = pcg.gen();
+	let theta = 2.0*PI*(r_theta_u32 as f64)/(<u32>::max_value() as f64);
+	// Perform the rotations of wo around specular_direction.
+	// First rotate away from specular_direction by rotating around the x-axis. See https://en.wikipedia.org/wiki/Rotation_matrix. (Any axis would do though, as long as it is not parallel with specular_direction.)
+	let cos_phi = phi.cos();
+	let sin_phi = phi.sin();
+	let mut reflection_direction = [specular_direction[0], cos_phi*specular_direction[1]-sin_phi*specular_direction[2], sin_phi*specular_direction[1]+cos_phi*specular_direction[2]];
+	// Then rotate wo around specular_direction. See https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another.
+	let reflection_parallell_specular = mul(cos_phi, specular_direction);
+	let reflection_perpendicular_specular = sub(reflection_direction, reflection_parallell_specular);
+	let w = cross(specular_direction, reflection_perpendicular_specular);
+	let x_1 = cos_phi/norm(reflection_perpendicular_specular);
+	let x_2 = sin_phi/norm(w);
+	let reflection_perpendicular_specular_rotation = mul(norm(reflection_perpendicular_specular), add(mul(x_1, reflection_perpendicular_specular), mul(x_2, w)));
+	add(reflection_perpendicular_specular_rotation, reflection_parallell_specular)
+}
+
+#[inline(always)]
+pub fn brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64) -> f64 {
+	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
+	let phi = dot(wo, specular_direction).acos();
+	let mut b = maximum_specular_angle;
+	let angle_to_surface = PI/2.0 - dot(n, specular_direction);
+	if b > angle_to_surface {
+		b = angle_to_surface;
+	}
+	let mut specular = 0.0;
+	if phi < b {
+		let a = 1.0/(2.0*PI*(b-b.sin()));
+		specular = 2.0*PI*a*(b-phi);
+	}
+	let diffuse = (1.0-ks)*2.0*dot(wo, n);
+	diffuse + specular
+}
+
+pub fn min(left: f64, right: f64) -> f64 {
+	if left < right {
+		left
+	} else {
+		right
+	}
+}
+
+/*
+#[inline(always)]
+pub fn brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], a: f64, eta_2: f64, ks: f64) -> f64 {
 	let eta_1 = 1.0;
 	let kd = 1.0 - ks;
 	let won = dot(wo, n);
@@ -219,8 +291,9 @@ pub fn dfg(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], a: f64, eta_2: f64, ks: f64)
 	let h = normalised(add(wi, wo));
 	let fd = 2.0;
 	//let fs = compute_d(wo, n, h, a)*compute_f(wi, h, n, eta_1, eta_2)*compute_g(wi, wo, h, n, a)/(won*win);
-	let fs = compute_f(wi, h, n, eta_1, eta_2);
-	(kd*fd + ks*fs)*won
+	//let fs = compute_f(wi, h, n, eta_1, eta_2);
+	//(kd*fd + ks*fs)*won
+	2.0*won
 }
 
 #[inline(always)]
@@ -279,3 +352,4 @@ pub fn compute_xi(x: f64) -> f64 {
 	}
 	return 0.0;
 }
+*/

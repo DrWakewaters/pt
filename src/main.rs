@@ -39,19 +39,19 @@ mod rhf;
 // Timings using NUMBER_OF_BINS = 64, width = 1000, height = 1000, image_scale_factor = 1, max_distance = 4.0, patch_radius = 1, search_window_radius = 5, number_of_scales = 1, number_of_rays (per thread) = ???.
 // Note that the renderer does constant work per thread regardless of the number of threads - N threads means N times more work in total.
 // 	#threads 	render		post-process	render speedup		post-process speedup
-//	1 			55s			150				1					1	
+//	1 			55s			150				1					1
 //	2 			60s			82s				1.8					1.8
 //	3 			62s			49s				2.7					3.1
 // 	4  			62s			49s				3.5					3.1
 // 	5  			65s			51s				4.2					2.9
 // 	6  			65s			49s				5.1					3.1
-// 	7  			70s			52s				5.5					2.9								
+// 	7  			70s			52s				5.5					2.9
 //	8			70s			55s				6.3					2.7
 
-const NUMBER_OF_BINS: usize = 256;
+const NUMBER_OF_BINS: usize = 128;
 
 fn main() {
-	let mut options = Options::new(1000, 1000, 1, 0, 8, 3, false, vec![(1.0, 1)], 5, 1, 120000000, false);
+	let mut options = Options::new(1000, 1000, 1, 0, 8, 3, true, vec![(3.0, 1)], 10, 1, 4000000, true);
 	options.render_images_to_png();
 }
 
@@ -87,7 +87,7 @@ impl Options {
 			perform_post_process,
 		}
 	}
-		
+
 	fn render_images_to_png(&mut self) {
 		let mut scene_for_physics = SceneForPhysics::new();
 		if self.continue_old_simulation {
@@ -159,9 +159,9 @@ impl Options {
 			for i in 0_usize..self.number_of_threads_post_process {
 				let mut number_of_rays = renderer_output.number_of_rays.clone();
 				let colors = renderer_output.colors.clone();
-				let bins = self.create_rhf_bins(&mut number_of_rays, &mut renderer_output);	
+				let bins = self.create_rhf_bins(&mut number_of_rays, &mut renderer_output);
 				let (width, height, image_scale_factor) = (self.width as i32, self.height as i32, self.image_scale_factor as i32);
-				let (max_distance, patch_radius, search_window_radius, number_of_scales) = (post_process_datum.0, post_process_datum.1, self.search_window_radius, self.number_of_scales);	
+				let (max_distance, patch_radius, search_window_radius, number_of_scales) = (post_process_datum.0, post_process_datum.1, self.search_window_radius, self.number_of_scales);
 				let (vertical_start, mut vertical_end) = (rows_per_thread*(i as i32), rows_per_thread*((i as i32)+1));
 				if i == self.number_of_threads_post_process - 1 {
 					vertical_end = (self.height as i32)*(self.image_scale_factor as i32);
@@ -176,7 +176,7 @@ impl Options {
 				let result = thread.join();
 				match result {
 					Ok(mut colors_denoised_partial) => {
-						renderer_output.colors.append(&mut colors_denoised_partial);	
+						renderer_output.colors.append(&mut colors_denoised_partial);
 					}
 					Err(e) => {
 						println!("{:?}", e);
@@ -187,7 +187,7 @@ impl Options {
 		let duration = now() - tm;
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
 	}
-	
+
 	fn create_rhf_bins(&self, number_of_rays: &mut Vec<u32>, renderer_output: &mut RendererOutput) -> Vec<[[f32; 3]; NUMBER_OF_BINS]> {
 		let mut bins: Vec<[[f32; 3]; NUMBER_OF_BINS]> = Vec::new();
 		for i in 0..self.width*self.height*self.image_scale_factor*self.image_scale_factor {
@@ -201,7 +201,7 @@ impl Options {
 		}
 		bins
 	}
-	
+
 	fn render(&self, scene_for_rendering: &mut SceneForRendering) -> RendererOutput {
 		let tm = now();
 		println!("Render starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10000000);
@@ -223,13 +223,13 @@ impl Options {
 					for (j, pixel) in renderer_output_partial.pixels.iter().enumerate() {
 						for k in 0..NUMBER_OF_BINS {
 							renderer_output.pixels[j].bins[k] = add_u16(renderer_output.pixels[j].bins[k], pixel.bins[k]);
-							
+
 						}
 						renderer_output.pixels[j].color = add(renderer_output.pixels[j].color, pixel.color);
 					}
 					for (j, color) in renderer_output_partial.colors.iter().enumerate() {
 						renderer_output.colors[j] = add(renderer_output.colors[j], *color);
-					}	
+					}
 					for (j, number_of_rays) in renderer_output_partial.number_of_rays.iter().enumerate() {
 						renderer_output.number_of_rays[j] = renderer_output.number_of_rays[j] + number_of_rays;
 					}
@@ -247,7 +247,7 @@ impl Options {
 	fn write_to_image(&self, renderer_output: &mut RendererOutput, prefix: usize) {
 		let tm = now();
 		print!("Writing starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10000000);
-		let _ = stdout().flush();		
+		let _ = stdout().flush();
 		let pixeldata_filename = format!("/Users/christian/video/pixeldata.txt");
 		let image_filename = format!("/Users/christian/video/{:01}_{:04}.png", prefix, self.frame_number);
 		make_file(self.width, self.height, self.image_scale_factor, renderer_output, &pixeldata_filename, &image_filename);

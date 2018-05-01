@@ -21,7 +21,7 @@ pub struct RHF {
 }
 
 impl RHF {
-	pub fn new(width: i32, height: i32, image_scale_factor: i32, max_distance: f32, patch_radius: i32, search_window_radius: i32, number_of_scales: i32, vertical_start: i32, vertical_end: i32, number_of_rays: Vec<u32>, colors: Vec<[f64; 3]>, bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>) -> Self {	
+	pub fn new(width: i32, height: i32, image_scale_factor: i32, max_distance: f32, patch_radius: i32, search_window_radius: i32, number_of_scales: i32, vertical_start: i32, vertical_end: i32, number_of_rays: Vec<u32>, colors: Vec<[f64; 3]>, bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>) -> Self {
 		let mut colors_denoised: Vec<[f64; 3]> = Vec::new();
 		let mut counter: Vec<f64> = Vec::new();
 		for _ in 0..width*height*image_scale_factor*image_scale_factor {
@@ -45,15 +45,8 @@ impl RHF {
 			counter,
 		}
 	}
-	
+
 	pub fn rhf(&mut self) -> Vec<[f64; 3]> {
-		/*
-		let indices_to_study: Vec<usize> = vec![(768*self.width*self.image_scale_factor + 288) as usize, (769*self.width*self.image_scale_factor + 300) as usize, (770*self.width*self.image_scale_factor + 312) as usize, (771*self.width*self.image_scale_factor + 324) as usize, (411*self.width*self.image_scale_factor + 576) as usize, (247*self.width*self.image_scale_factor + 433) as usize];
-		let mut influencer_indices: Vec<Vec<usize>> = Vec::new();
-		for _ in 0..indices_to_study.len() {
-			influencer_indices.push(Vec::new());
-		}
-		*/
 		for y_0 in self.vertical_start..self.vertical_end {
 			for x_0 in 0..self.width*self.image_scale_factor  {
 				for y_1 in y_0-self.search_window_radius..y_0+self.search_window_radius+1 {
@@ -82,7 +75,7 @@ impl RHF {
 			}
 		}
 		color_result
-	}	
+	}
 	pub fn kolmogorov_smirnov_distance(&self, pixel_indices: &Vec<(i32, i32)>) -> f32 {
 		let mut max_distances: Vec<f32> = Vec::new();
 		for pixel_index in pixel_indices {
@@ -91,6 +84,13 @@ impl RHF {
 			let mut max_distance = 0.0;
 			let bins_0 = &self.bins[pixel_index.0 as usize];
 			let bins_1 = &self.bins[pixel_index.1 as usize];
+/*
+			println!("pixel_index = ({}, {})", pixel_index.0, pixel_index.1);
+			for i in 0..NUMBER_OF_BINS {
+				println!("bins[{}] = {:?}", i, bins_0[i as usize]);
+			}
+			println!("");
+			*/
 			let number_of_rays_0 = self.number_of_rays[pixel_index.0 as usize];
 			let number_of_rays_1 = self.number_of_rays[pixel_index.1 as usize];
 			if number_of_rays_0 == 0 || number_of_rays_1 == 0 {

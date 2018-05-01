@@ -49,7 +49,7 @@ impl DataForDrawing {
 			}
 			let mut factor = 1.0;
 			if max_intensity > 1e-9 {
-				let modified_max_intensity = (max_intensity/300.0).atan()*255.0/(PI/2.0);
+				let modified_max_intensity = (max_intensity/20.0).atan()*255.0/(PI/2.0);
 				factor = modified_max_intensity/max_intensity;
 			}
 			pixels.push((pixel[0]*factor) as u8);
@@ -66,7 +66,7 @@ impl DataForDrawing {
 }
 
 pub fn make_file(width: u32, height: u32, image_scale_factor: u32, renderer_output_aggregate: &mut RendererOutput, text_filename: &String, image_filename: &String) {
-	let data_for_storing = DataForStoring::new(width, height, image_scale_factor, renderer_output_aggregate);		
+	let data_for_storing = DataForStoring::new(width, height, image_scale_factor, renderer_output_aggregate);
 	let write_result = write_frame(&text_filename, &data_for_storing);
 	match write_result {
 		Err(e) => {
@@ -97,7 +97,7 @@ pub fn make_file(width: u32, height: u32, image_scale_factor: u32, renderer_outp
 fn write_frame(text_filename: &String, data_for_storing: &DataForStoring) -> Result<(), Error> {
 	let serialized = to_string(data_for_storing)?;
 	let mut file = File::create(text_filename)?;
-	file.write_all(serialized.as_bytes())?;	
+	file.write_all(serialized.as_bytes())?;
 	Ok(())
 }
 
@@ -123,7 +123,7 @@ fn draw_frame(image_filename: &String, data_for_drawing: DataForDrawing) -> Resu
 pub fn write_scene(text_filename: &String, scene: &SceneForPhysics) -> Result<(), Error> {
 	let serialized = to_string(scene)?;
 	let mut file = File::create(text_filename)?;
-	file.write_all(serialized.as_bytes())?;	
+	file.write_all(serialized.as_bytes())?;
 	Ok(())
 }
 

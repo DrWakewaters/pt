@@ -1,3 +1,5 @@
+use std::f64::consts::PI;
+
 use rand::{OsRng, Rng};
 use pcg_rand::Pcg32;
 
@@ -41,13 +43,13 @@ impl SceneForPhysics {
 		let red = [0.9, 0.1, 0.1];
 		let green = [0.1, 0.9, 0.1];
 		let specular_probability_diffuse = 0.0;
-		let specular_constant_diffuse = 1.0;
-		let specular_probability_specular = 1.0;
-		let specular_constant_specular = 0.3;
-		let refractive_index = 20.0;
+		let maximum_specular_angle_diffuse = 0.0;
+		let specular_probability_specular = 0.0;
+		let maximum_specular_angle_specular = 0.3;
+		let refractive_index = 2.0;
 		let mut spheres: Vec<SpherePhysics> = Vec::new();
 		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
-		let spheres_to_add = 4;
+		let spheres_to_add = 16;
 		let mut remaining_spheres_to_add = spheres_to_add;
 		let sphere_radius = 100.0;
 		let color = [1.0, 1.0, 1.0];
@@ -65,29 +67,12 @@ impl SceneForPhysics {
 			let rvx_u32: u32 = pcg.gen();
 			let rvy_u32: u32 = pcg.gen();
 			let rvz_u32: u32 = pcg.gen();
-			let mut rx = (1000.0-2.0*sphere_radius)*((rx_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
-			let mut ry = (1000.0-2.0*sphere_radius)*((ry_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
-			let mut rz = (1000.0-2.0*sphere_radius)*((rz_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
-			let mut rvx = 0.0*((rvx_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
-			let mut rvy = 0.0*((rvy_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
-			let mut rvz = 0.0*((rvz_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
-			if remaining_spheres_to_add == 4 {
-				rx = 0.0;
-				ry = 880.0;
-				rz = 700.0;
-			} else if remaining_spheres_to_add == 3 {
-				rx = 400.0;
-				ry = 880.0;
-				rz = 1300.0;
-			} else if remaining_spheres_to_add == 2 {
-				rx = 800.0;
-				ry = 880.0;
-				rz = 1900.0;
-			} else {
-				rx = 1200.0;
-				ry = 880.0;
-				rz = 2500.0;
-			}
+			let rx = (1000.0-2.0*sphere_radius)*((rx_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
+			let ry = (1000.0-2.0*sphere_radius)*((ry_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
+			let rz = (1000.0-2.0*sphere_radius)*((rz_u32 as f64)/(<u32>::max_value() as f64) - 0.5) + 500.0;
+			let rvx = 0.0*((rvx_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
+			let rvy = 0.0*((rvy_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
+			let rvz = 0.0*((rvz_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
 			let rotational_axisx = 1.0*((rvx_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
 			let rotational_axisy = 1.0*((rvx_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
 			let rotational_axisz = 1.0*((rvx_u32 as f64)/(<u32>::max_value() as f64) - 0.5);
@@ -99,41 +84,49 @@ impl SceneForPhysics {
 					add_sphere = false;
 				}
 			}
+			let mut is_lightsource = true;
+			let mut maximum_specular_angle = maximum_specular_angle_diffuse;
+			let mut specular_probability = specular_probability_diffuse;
+			if remaining_spheres_to_add%5 > 0 {
+				is_lightsource = false;
+				maximum_specular_angle = maximum_specular_angle_specular;
+				specular_probability = specular_probability_specular;
+			}
 			if add_sphere {
-				spheres.push(SpherePhysics::new([rx, ry, rz], sphere_radius, color, color_alt, local_x, local_y, local_z, rotational_axis, rotational_angular_speed, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, [rvx, rvy, rvz], inertia, mass, false));
+				spheres.push(SpherePhysics::new([rx, ry, rz], sphere_radius, color, color_alt, local_x, local_y, local_z, rotational_axis, rotational_angular_speed, specular_probability, maximum_specular_angle, refractive_index, is_lightsource, true, [rvx, rvy, rvz], inertia, mass, false));
 				remaining_spheres_to_add -= 1;
 			}
 		}
         let triangles = vec![
 			// Left wall.
-            //TrianglePhysics::new(&nodes, [0, 4, 5], red, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes, [0, 5, 1], red, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
+            TrianglePhysics::new(&nodes, [0, 4, 5], red, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+            TrianglePhysics::new(&nodes, [0, 5, 1], red, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
 			// Far wall.
-            //TrianglePhysics::new(&nodes, [1, 5, 6], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes, [1, 6, 2], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-			// Right wall.            
-			//TrianglePhysics::new(&nodes, [2, 6, 7], green, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes, [2, 7, 3], green, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
+            TrianglePhysics::new(&nodes, [1, 5, 6], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+            TrianglePhysics::new(&nodes, [1, 6, 2], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+			// Right wall.
+			TrianglePhysics::new(&nodes, [2, 6, 7], green, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+            TrianglePhysics::new(&nodes, [2, 7, 3], green, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
             // Near wall.
-			//TrianglePhysics::new(&nodes, [3, 7, 4], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, true),
-            //TrianglePhysics::new(&nodes, [3, 4, 0], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, true),
+			//TrianglePhysics::new(&nodes, [3, 7, 4], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, true),
+            //TrianglePhysics::new(&nodes, [3, 4, 0], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, true),
 			// Floor.
-            //TrianglePhysics::new(&nodes, [4, 7, 6], grey, specular_probability_specular, specular_constant_specular, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes, [4, 6, 5], grey, specular_probability_specular, specular_constant_specular, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes_large_floor, [0, 3, 2], grey, specular_probability_specular, specular_constant_specular, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes_large_floor, [0, 2, 1], grey, specular_probability_specular, specular_constant_specular, refractive_index, false, false),
+            TrianglePhysics::new(&nodes, [4, 7, 6], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+            TrianglePhysics::new(&nodes, [4, 6, 5], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
             // Ceiling.
-            //TrianglePhysics::new(&nodes, [0, 1, 2], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-            //TrianglePhysics::new(&nodes, [0, 2, 3], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, false, false),
-            TrianglePhysics::new(&nodes, [0, 1, 2], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, true, false),
-            TrianglePhysics::new(&nodes, [0, 2, 3], grey, specular_probability_diffuse, specular_constant_diffuse, refractive_index, true, false),
+            TrianglePhysics::new(&nodes, [0, 1, 2], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+            TrianglePhysics::new(&nodes, [0, 2, 3], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false),
+			/*
+			TrianglePhysics::new(&nodes_large_floor, [0, 3, 2], grey, specular_probability_specular, maximum_specular_angle_specular, refractive_index, false, true, false),
+			TrianglePhysics::new(&nodes_large_floor, [0, 2, 1], grey, specular_probability_specular, maximum_specular_angle_specular, refractive_index, false, true, false),
+			*/
         ];
 		Self {
 			triangles,
 			spheres,
 		}
 	}
-	
+
 	pub fn simulate_physics(&mut self) {
 		let time: f64 = 0.5;
 		let number_of_timesteps: u64 = 1000;
@@ -175,7 +168,7 @@ impl SceneForPhysics {
 							}
 						} else {
 							self.move_spheres(time_left);
-							finished = true;	
+							finished = true;
 						}
 					}
 					None => {
@@ -186,7 +179,7 @@ impl SceneForPhysics {
 			}
 		}
 	}
-	
+
 	fn move_spheres(&mut self, time: f64) {
 		for sphere in self.spheres.iter_mut() {
 			// Translation.
@@ -210,7 +203,7 @@ impl SceneForPhysics {
 			sphere.local_z = [local_z[1], local_z[2], local_z[3]];
 		}
 	}
-	
+
 	fn compute_collision_data(&mut self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		let sphere_sphere_collision_data = self.compute_sphere_sphere_collision();
 		let sphere_triangle_collision_data = self.compute_sphere_triangle_collision();
@@ -233,7 +226,7 @@ impl SceneForPhysics {
 			}
 		}
 	}
-	
+
 	fn compute_sphere_triangle_collision(&self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		// Index of the sphere, index of the triangle, time until collision, point of contact, CollisionType.
 		let mut collision_data: Option<(usize, usize, f64, [f64; 3], CollisionType)> = None;
@@ -289,7 +282,7 @@ impl SceneForPhysics {
 		}
 		collision_data
 	}
-	
+
 	fn compute_sphere_sphere_collision(&self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		// Index of the first sphere, index of the second sphere, time until collision, point of contact, CollisionType.
 		let mut collision_data: Option<(usize, usize, f64, [f64; 3], CollisionType)> = None;
@@ -340,7 +333,7 @@ impl SceneForPhysics {
 							let sphere_center_after_t = add(sphere.center, mul(time, sphere.velocity));
 							let other_sphere_center_after_t = add(other_sphere.center, mul(time, other_sphere.velocity));
 							let intersection = add(mul(other_sphere.radius/(sphere.radius+other_sphere.radius), sphere_center_after_t), mul(sphere.radius/(sphere.radius+other_sphere.radius), other_sphere_center_after_t));
-							collision_data = Some((i, j, time, intersection, CollisionType::Sphere));	
+							collision_data = Some((i, j, time, intersection, CollisionType::Sphere));
 						}
 						None => {
 						}
@@ -348,9 +341,9 @@ impl SceneForPhysics {
 				}
 			}
 		}
-		collision_data		
+		collision_data
 	}
-	
+
 	fn simulate_sphere_sphere_gravitation(&mut self, time: f64) {
 		let gravitation_constant = 0.0;
 		let mut accelerations: Vec<[f64; 3]> = Vec::new();
@@ -371,7 +364,7 @@ impl SceneForPhysics {
 			sphere.velocity = add(sphere.velocity, mul(time, accelerations[i]));
 		}
 	}
-	
+
 	// For fun. Gravitation towards the closet surface.
 	/*
 	fn simulate_sphere_scene_gravitation(&mut self, time: f64) {
@@ -391,8 +384,8 @@ impl SceneForPhysics {
 		}
 	}
 	*/
-	
-	
+
+
 	fn simulate_sphere_scene_gravitation(&mut self, time: f64) {
 		let gravitational_acceleration = [1.0, 0.0, 0.0];
 		for sphere in self.spheres.iter_mut() {
@@ -426,7 +419,7 @@ impl SceneForRendering {
 		for sphere in scene_for_physics.spheres {
 			if sphere.is_lightsource {
 				let lightsource_sphere_for_rendering = SphereLightsource::new(&sphere);
-				sphere_lightsources.push(lightsource_sphere_for_rendering);				
+				sphere_lightsources.push(lightsource_sphere_for_rendering);
 			}
 			let surface_sphere_for_rendering = SphereFast::new(&sphere);
 			sphere_surfaces.push(surface_sphere_for_rendering);

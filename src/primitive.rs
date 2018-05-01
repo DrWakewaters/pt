@@ -1,9 +1,7 @@
-use std::f64::consts::PI;
-
 use rand::Rng;
 use pcg_rand::Pcg32;
 
-use math::{add, cross, dot, mul, normalised, pick_reflection_lambertian, pick_reflection_uniform_on_stripe, pick_reflection_uniform, solve_linear, sub};
+use math::{add, cross, dot, mul, normalised, pick_reflection_lambertian, pick_reflection_uniform, solve_linear, sub};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrianglePhysics {
@@ -15,14 +13,15 @@ pub struct TrianglePhysics {
 	pub normal: [f64; 3],
 	pub color: [f64; 3],
 	pub specular_probability: f64,
-	pub specular_constant: f64,
+	pub maximum_specular_angle: f64,
 	pub refractive_index: f64,
 	pub is_lightsource: bool,
+	pub is_opaque: bool,
 	pub invisible_for_camera_ray: bool,
 }
 
 impl TrianglePhysics {
-	pub fn new(nodes: &Vec<[f64; 3]>, indices: [usize; 3], color: [f64; 3], specular_probability: f64, specular_constant: f64, refractive_index: f64, is_lightsource: bool, invisible_for_camera_ray: bool) -> Self {
+	pub fn new(nodes: &Vec<[f64; 3]>, indices: [usize; 3], color: [f64; 3], specular_probability: f64, maximum_specular_angle: f64, refractive_index: f64, is_lightsource: bool, is_opaque: bool, invisible_for_camera_ray: bool) -> Self {
 		let e1 = sub(nodes[indices[1]], nodes[indices[0]]);
 		let e2 = sub(nodes[indices[2]], nodes[indices[0]]);
 		let normal = normalised(cross(sub(nodes[indices[1]], nodes[indices[0]]), sub(nodes[indices[2]], nodes[indices[0]])));
@@ -35,9 +34,10 @@ impl TrianglePhysics {
 			normal,
 			color,
 			specular_probability,
-			specular_constant,
+			maximum_specular_angle,
 			refractive_index,
 			is_lightsource,
+			is_opaque,
 			invisible_for_camera_ray,
 		}
 	}
@@ -55,9 +55,10 @@ pub struct SpherePhysics {
 	pub rotational_axis: [f64; 3],
 	pub rotational_angular_speed: f64,
 	pub specular_probability: f64,
-	pub specular_constant: f64,
+	pub maximum_specular_angle: f64,
 	pub refractive_index: f64,
 	pub is_lightsource: bool,
+	pub is_opaque: bool,
 	pub velocity: [f64; 3],
 	pub inertia: [[f64; 3]; 3],
 	pub mass: f64,
@@ -65,7 +66,7 @@ pub struct SpherePhysics {
 }
 
 impl SpherePhysics {
-	pub fn new(center: [f64; 3], radius: f64, color: [f64; 3], color_alt: [f64; 3], local_x: [f64; 3], local_y: [f64; 3], local_z: [f64; 3], rotational_axis: [f64; 3], rotational_angular_speed: f64, specular_probability: f64, specular_constant: f64, refractive_index: f64, is_lightsource: bool, velocity: [f64; 3], inertia: [[f64; 3]; 3], mass: f64, invisible_for_camera_ray: bool) -> Self {
+	pub fn new(center: [f64; 3], radius: f64, color: [f64; 3], color_alt: [f64; 3], local_x: [f64; 3], local_y: [f64; 3], local_z: [f64; 3], rotational_axis: [f64; 3], rotational_angular_speed: f64, specular_probability: f64, maximum_specular_angle: f64, refractive_index: f64, is_lightsource: bool, is_opaque: bool, velocity: [f64; 3], inertia: [[f64; 3]; 3], mass: f64, invisible_for_camera_ray: bool) -> Self {
 		Self {
 			center,
 			radius,
@@ -77,9 +78,10 @@ impl SpherePhysics {
 			rotational_axis,
 			rotational_angular_speed,
 			specular_probability,
-			specular_constant,
+			maximum_specular_angle,
 			refractive_index,
 			is_lightsource,
+			is_opaque,
 			velocity,
 			inertia,
 			mass,
@@ -169,12 +171,13 @@ pub struct TriangleFast {
 	pub c_nu: f64,
 	pub c_nv: f64,
 	pub c_d: f64,
-	pub specular_constant: f64,
+	pub maximum_specular_angle: f64,
 	pub refractive_index: f64,
 	pub color: [f64; 3],
 	pub normal: [f64; 3],
 	pub invisible_for_camera_ray: bool,
 	pub is_lightsource: bool,
+	pub is_opaque: bool,
 }
 
 impl TriangleFast {
@@ -196,7 +199,7 @@ impl TriangleFast {
 			u = 0;
 			v = 1;
 		}
-		let denom = b[u]*c[v]-b[v]*c[u];		
+		let denom = b[u]*c[v]-b[v]*c[u];
 		Self {
 			n_u: normal[u]/normal[k],
 			n_v: normal[v]/normal[k],
@@ -209,15 +212,16 @@ impl TriangleFast {
 			c_nu: -1.0*c[u]/denom,
 			c_nv: c[v]/denom,
 			c_d: (c[u]*node0[v]-c[v]*node0[u])/denom,
-			specular_constant: triangle_physics.specular_constant,
+			maximum_specular_angle: triangle_physics.maximum_specular_angle,
 			refractive_index: triangle_physics.refractive_index,
 			color: triangle_physics.color,
 			normal: triangle_physics.normal,
 			invisible_for_camera_ray: triangle_physics.invisible_for_camera_ray,
 			is_lightsource: triangle_physics.is_lightsource,
+			is_opaque: triangle_physics.is_opaque,
 		}
 	}
-	
+
 	pub fn compute_intersection_color(&self, intersection: &mut[f64; 3]) -> [f64; 3] {
 		if self.is_lightsource {
 			return self.color;
@@ -236,10 +240,11 @@ pub struct SphereFast {
 	pub local_y: [f64; 3],
 	pub local_z: [f64; 3],
 	pub specular_probability: f64,
-	pub specular_constant: f64,
+	pub maximum_specular_angle: f64,
 	pub refractive_index: f64,
 	pub is_lightsource: bool,
 	pub invisible_for_camera_ray: bool,
+	pub is_opaque: bool,
 }
 
 impl SphereFast {
@@ -253,14 +258,17 @@ impl SphereFast {
 			local_y: sphere_physics.local_y,
 			local_z: sphere_physics.local_z,
 			specular_probability: sphere_physics.specular_probability,
-			specular_constant: sphere_physics.specular_constant,
+			maximum_specular_angle: sphere_physics.maximum_specular_angle,
 			refractive_index: sphere_physics.refractive_index,
 			is_lightsource: sphere_physics.is_lightsource,
 			invisible_for_camera_ray: sphere_physics.invisible_for_camera_ray,
+			is_opaque: sphere_physics.is_opaque,
 		}
 	}
-	
+
 	pub fn compute_intersection_color(&self, intersection: &mut[f64; 3]) -> [f64; 3] {
+		return self.color;
+
 		if self.is_lightsource {
 			return self.color;
 		}
@@ -270,10 +278,9 @@ impl SphereFast {
 		let local_intersection = solve_linear([self.local_x, self.local_y, self.local_z], intersection_translated);
 		self.get_color(local_intersection)
 	}
-	
+
 	pub fn get_color(&self, local_intersection: [f64; 3]) -> [f64; 3] {
-		return self.color;
-		
+
 		let region_y = ((local_intersection[1]/self.radius)*5.0).floor() as i64;
 		match region_y%2 {
 			0 => {
@@ -283,6 +290,6 @@ impl SphereFast {
 				self.color_alt
 			}
 		}
-		
+
 	}
 }

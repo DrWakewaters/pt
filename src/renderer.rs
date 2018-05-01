@@ -4,8 +4,7 @@ use std::f64::consts::PI;
 use rand::{OsRng, Rng};
 use pcg_rand::Pcg32;
 
-use math::{add, dfg, dot, elementwise_mul, mul, norm, normalised, pick_reflection_lambertian, pick_reflection_uniform, point_in_triangle, solve_linear, sub};
-use primitive::SphereFast;
+use math::{add, brdf, dot, elementwise_mul, mul, norm, normalised, pick_reflection_from_brdf, pick_reflection_lambertian, pick_reflection_uniform, point_in_triangle, sub};
 use scene::SceneForRendering;
 use NUMBER_OF_BINS;
 
@@ -64,17 +63,17 @@ impl Renderer {
 			width,
 			height,
 			scene,
-			image_scale_factor,	
+			image_scale_factor,
 		}
-	} 
+	}
 
 	pub fn render(&mut self, number_of_rays: u64, write_percentage: bool) -> RendererOutput {
 		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
 		let mut renderer_output = RendererOutput::new(self.width, self.height, self.image_scale_factor);
-		self.perform_work_triangle_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+		self.perform_work_sphere_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
 		renderer_output
 	}
-	
+
 	#[allow(dead_code)]
 	fn perform_work_sphere_lightsource(&mut self, mut pcg: &mut Pcg32, mut renderer_output: &mut RendererOutput, number_of_rays: u64, write_percentage: bool) {
 		let lightsource_count = self.scene.sphere_lightsources.len();
@@ -114,7 +113,7 @@ impl Renderer {
 			}
 		}
 	}
-		
+
 	fn compute(&mut self, intersection: [f64; 3], direction: [f64; 3], normal: [f64; 3], mut pixel: &mut[f64; 3], mut pcg: &mut Pcg32, mut renderer_output: &mut RendererOutput) {
 		let mut intersection = intersection;
 		let mut direction = direction;
@@ -122,7 +121,7 @@ impl Renderer {
 		let mut hit_object = true;
 		let mut color = [0.0, 0.0, 0.0];
 		let mut old_direction = direction;
-		let mut specular_constant = 1.0;
+		let mut maximum_specular_angle = 0.0;
 		let mut refractive_index = 1.0;
 		let mut specular_probability = 0.0;
 		loop {
@@ -136,9 +135,9 @@ impl Renderer {
 				} else {
 					*pixel = mul(survival_boost_factor, *pixel);
 				}
+				self.force_light_to_eye(intersection, normal, old_direction, &mut maximum_specular_angle, &mut refractive_index, &mut specular_probability, pixel, &mut renderer_output);
 				old_direction = direction;
-				self.force_light_to_eye(intersection, normal, old_direction, &mut specular_constant, &mut refractive_index, &mut specular_probability, pixel, &mut renderer_output);
-				hit_object = self.compute_ray_object_intersection(&mut intersection, &mut direction, &mut normal, &mut specular_constant, &mut refractive_index, &mut specular_probability, &mut pixel, &mut pcg, &mut color, false);
+				hit_object = self.compute_ray_object_intersection(&mut intersection, &mut direction, &mut normal, &mut maximum_specular_angle, &mut refractive_index, &mut specular_probability, &mut pixel, &mut pcg, &mut color, false);
 				if hit_object {
 					*pixel = elementwise_mul(*pixel, color);
 				}
@@ -147,8 +146,8 @@ impl Renderer {
 			}
 		}
 	}
-	
-	fn force_light_to_eye(&mut self, intersection: [f64; 3], normal: [f64; 3], old_direction: [f64; 3], specular_constant: &mut f64, refractive_index: &mut f64, specular_probability: &mut f64, pixel: &mut[f64; 3], renderer_output: &mut RendererOutput) {
+
+	fn force_light_to_eye(&mut self, intersection: [f64; 3], normal: [f64; 3], old_direction: [f64; 3], maximum_specular_angle: &mut f64, refractive_index: &mut f64, specular_probability: &mut f64, pixel: &mut[f64; 3], renderer_output: &mut RendererOutput) {
 		let pinhole = [500.0, 500.0, -1000.0];
 		let direction_to_retina = normalised(sub(pinhole, intersection));
 		if dot(normal, direction_to_retina) < 0.0 {
@@ -161,21 +160,16 @@ impl Renderer {
 		if (retina_intersection[2]-retina_center[2]).abs() > 1e-6 {
 			return;
 		}
-		
+
 		let dist = self.compute_ray_object_distance(intersection, direction_to_retina, true);
 		let distance_to_pinhole = dot(sub(pinhole, intersection), retina_normal)/dot(direction_to_retina, retina_normal);
 		if dist < distance_to_pinhole {
 			return;
 		}
+		let incoming_direction = mul(-1.0, old_direction);
 		if d > 0.0 && retina_intersection[0] > 0.0 && retina_intersection[1] > 0.0 && retina_intersection[0] < (self.width as f64) && retina_intersection[1] < (self.height as f64) {
 			let mut pixel_modified = [pixel[0], pixel[1], pixel[2]];
-			let diffuse = 2.0*dot(normal, direction_to_retina);
-			//let mirror_reflection = normalised(sub(intersection, mul(2.0, mul(dot(intersection, normal), normal))));
-			//let alphamax = PI/2.0*dot(normal, mirror_reflection).acos();
-			//let cosalpha = dot(direction_to_retina, mirror_reflection);
-			//@TODO: Fix specular, see Swift version.
-			//let f = diffuse;
-			let f = dfg(old_direction, direction_to_retina, normal, *specular_constant, *refractive_index, *specular_probability);
+			let f = brdf(incoming_direction, direction_to_retina, normal, *maximum_specular_angle, *refractive_index, *specular_probability);
 			let cos_retina = dot(direction_to_retina, retina_normal);
 			if cos_retina < 0.0 || cos_retina > 1.0 {
 				println!("{:?}, {:?}", direction_to_retina, retina_normal);
@@ -190,27 +184,25 @@ impl Renderer {
 			self.store_intersection(retina_intersection, pixel_modified, renderer_output);
 		}
 	}
-	
-	fn store_intersection(&self, retina_intersection: [f64; 3], pixel: [f64; 3], renderer_output: &mut RendererOutput) {		
+
+	fn store_intersection(&self, retina_intersection: [f64; 3], pixel: [f64; 3], renderer_output: &mut RendererOutput) {
 		let y = ((self.height as f64 - retina_intersection[1])*(self.image_scale_factor as f64)) as u32;
 		let x = ((self.width as f64 - retina_intersection[0])*(self.image_scale_factor as f64)) as u32;
 		if (y*self.width+x) < self.width*self.height*self.image_scale_factor*self.image_scale_factor {
 			let pos = (y*self.width*self.image_scale_factor+x) as usize;
 			renderer_output.number_of_rays[pos] += 1;
 			// Store information about the ray.
-			/*
-			renderer_output.pixels[pos].bins[(pixel[0]*(NUMBER_OF_BINS as f64 - 1.0)) as usize][0] += 1;
-			renderer_output.pixels[pos].bins[(pixel[1]*(NUMBER_OF_BINS as f64 - 1.0)) as usize][1] += 1;
-			renderer_output.pixels[pos].bins[(pixel[2]*(NUMBER_OF_BINS as f64 - 1.0)) as usize][2] += 1;
-			*/
+			renderer_output.pixels[pos].bins[(((pixel[0]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][0] += 1;
+			renderer_output.pixels[pos].bins[(((pixel[1]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][1] += 1;
+			renderer_output.pixels[pos].bins[(((pixel[2]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][2] += 1;
 			renderer_output.pixels[pos].color = add(renderer_output.pixels[pos].color, pixel);
 			renderer_output.colors[pos] = add(renderer_output.colors[pos], pixel);
 		} else {
 			println!("Can't write to pixels[{}] (x = {}, y = {}), color = {:?}", y*self.width*self.image_scale_factor+x, retina_intersection[0], retina_intersection[1], pixel);
 		}
 	}
-	
-	fn compute_ray_object_intersection(&self, intersection: &mut[f64; 3], direction: &mut[f64; 3], normal: &mut[f64; 3], specular_constant: &mut f64, refractive_index: &mut f64, specular_probability: &mut f64, pixel: &mut[f64; 3], pcg: &mut Pcg32, color: &mut[f64; 3], camera_ray: bool) -> bool {
+
+	fn compute_ray_object_intersection(&self, intersection: &mut[f64; 3], direction: &mut[f64; 3], normal: &mut[f64; 3], maximum_specular_angle: &mut f64, refractive_index: &mut f64, specular_probability: &mut f64, pixel: &mut[f64; 3], pcg: &mut Pcg32, color: &mut[f64; 3], camera_ray: bool) -> bool {
 		let (triangle_hit, triangle_index, triangle_distance) = self.compute_ray_triangle_intersection(*intersection, *direction, camera_ray);
 		let (sphere_hit, sphere_index, sphere_distance) = self.compute_ray_sphere_intersection(*intersection, *direction, camera_ray);
 		// The ray hit nothing.
@@ -231,17 +223,27 @@ impl Renderer {
 			*direction = pick_reflection_lambertian(*normal, pcg);
 			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
 			*/
+			/*
 			*specular_probability = self.scene.triangle_surfaces[triangle_index].specular_probability;
 			*refractive_index = self.scene.triangle_surfaces[triangle_index].refractive_index;
-			*specular_constant = self.scene.triangle_surfaces[triangle_index].specular_constant;
+			*maximum_specular_angle = self.scene.triangle_surfaces[triangle_index].maximum_specular_angle;
 			*direction = pick_reflection_uniform(*normal, pcg);
-			let halfway_vector = normalised(add(incoming_direction, *direction));
 			if dot(incoming_direction, *normal) < 0.0 {
-				return false; // Should never happen yet it does.
+				//println!("Wrong direction in compute_ray_object_intersection, triangle, {}.", dot(incoming_direction, *normal));
+				return false;
 			}
-			let dfg = dfg(incoming_direction, *direction, *normal, *specular_constant, *refractive_index, *specular_probability);			
+			let brdf = brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability);
 			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
-			*color = mul(dfg, *color);
+			*color = mul(brdf, *color);
+			*/
+			*specular_probability = self.scene.triangle_surfaces[triangle_index].specular_probability;
+			*refractive_index = self.scene.triangle_surfaces[triangle_index].refractive_index;
+			*maximum_specular_angle = self.scene.triangle_surfaces[triangle_index].maximum_specular_angle;
+			*direction = pick_reflection_from_brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability, pcg);
+			if dot(incoming_direction, *normal) < 0.0 {
+				return false;
+			}
+			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
 		} else {
 			*intersection = add(*intersection, mul(sphere_distance, *direction));
 			*normal = normalised(sub(*intersection, self.scene.sphere_surfaces[sphere_index].center));
@@ -254,21 +256,31 @@ impl Renderer {
 			*direction = pick_reflection_lambertian(*normal, pcg);
 			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
 			*/
+			/*
 			*specular_probability = self.scene.sphere_surfaces[sphere_index].specular_probability;
 			*refractive_index = self.scene.sphere_surfaces[sphere_index].refractive_index;
-			*specular_constant = self.scene.sphere_surfaces[sphere_index].specular_constant;
+			*maximum_specular_angle = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
 			*direction = pick_reflection_uniform(*normal, pcg);
-			let halfway_vector = normalised(add(incoming_direction, *direction));
 			if dot(incoming_direction, *normal) < 0.0 {
-				return false; // Should never happen yet it does.
+				//println!("Wrong direction in compute_ray_object_intersection, sphere, {}.", dot(incoming_direction, *normal));
+				return false;
 			}
-			let dfg = dfg(incoming_direction, *direction, *normal, *specular_constant, *refractive_index, *specular_probability);			
+			let brdf = brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability);
 			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
-			*color = mul(dfg, *color);
+			*color = mul(brdf, *color);
+			*/
+			*specular_probability = self.scene.sphere_surfaces[sphere_index].specular_probability;
+			*refractive_index = self.scene.sphere_surfaces[sphere_index].refractive_index;
+			*maximum_specular_angle = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
+			*direction = pick_reflection_from_brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability, pcg);
+			if dot(incoming_direction, *normal) < 0.0 {
+				return false;
+			}
+			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
 		}
 		return true;
 	}
-	
+
 	fn compute_ray_object_distance(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> f64 {
 		let (_, _, triangle_distance) = self.compute_ray_triangle_intersection(intersection, direction, camera_ray);
 		let (_, _, sphere_distance) = self.compute_ray_sphere_intersection(intersection, direction, camera_ray);
@@ -278,7 +290,7 @@ impl Renderer {
 			sphere_distance
 		}
 	}
-	
+
 	fn compute_ray_triangle_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64) {
 		let mut triangle_hit = false;
 		let mut triangle_index = 0;
@@ -311,7 +323,7 @@ impl Renderer {
 		}
 		(triangle_hit, triangle_index, triangle_distance)
 	}
-	
+
 	fn compute_ray_sphere_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64) {
 		let mut sphere_hit = false;
 		let mut sphere_index = 0;
