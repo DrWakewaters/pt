@@ -48,10 +48,10 @@ mod rhf;
 // 	7  			70s			52s				5.5					2.9
 //	8			70s			55s				6.3					2.7
 
-const NUMBER_OF_BINS: usize = 128;
+const NUMBER_OF_BINS: usize = 2;
 
 fn main() {
-	let mut options = Options::new(1000, 1000, 1, 0, 8, 3, true, vec![(3.0, 1)], 10, 1, 4000000, true);
+	let mut options = Options::new(1000, 1000, 1, 0, 8, 3, true, vec![(3.0, 1)], 10, 1, 20000000, false);
 	options.render_images_to_png();
 }
 
@@ -250,7 +250,7 @@ impl Options {
 		let _ = stdout().flush();
 		let pixeldata_filename = format!("/Users/christian/video/pixeldata.txt");
 		let image_filename = format!("/Users/christian/video/{:01}_{:04}.png", prefix, self.frame_number);
-		make_file(self.width, self.height, self.image_scale_factor, renderer_output, &pixeldata_filename, &image_filename);
+		make_file(self.width, self.height, self.image_scale_factor, renderer_output, &pixeldata_filename, &image_filename, self.number_of_rays*(self.number_of_threads_render as u64));
 		let duration = now() - tm;
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
 	}

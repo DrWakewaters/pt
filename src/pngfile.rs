@@ -14,15 +14,17 @@ struct DataForStoring {
 	width: u32,
 	height: u32,
 	image_scale_factor: u32,
+	number_of_rays_total: u64,
 	pixels: Vec<[f64; 3]>,
 }
 
 impl DataForStoring {
-	fn new(width: u32, height: u32, image_scale_factor: u32, renderer_output_aggregate: &mut RendererOutput) -> Self {
+	fn new(width: u32, height: u32, image_scale_factor: u32, number_of_rays_total: u64, renderer_output_aggregate: &mut RendererOutput) -> Self {
 		DataForStoring {
 			width,
 			height,
 			image_scale_factor,
+			number_of_rays_total,
 			pixels: renderer_output_aggregate.colors.clone(),
 		}
 	}
@@ -33,6 +35,7 @@ struct DataForDrawing {
 	width: u32,
 	height: u32,
 	image_scale_factor: u32,
+	number_of_rays_total: u64,
 	pixels: Vec<u8>
 }
 
@@ -49,7 +52,7 @@ impl DataForDrawing {
 			}
 			let mut factor = 1.0;
 			if max_intensity > 1e-9 {
-				let modified_max_intensity = (max_intensity/20.0).atan()*255.0/(PI/2.0);
+				let modified_max_intensity = (max_intensity/((data_for_storing.number_of_rays_total as f64)/2000000.0)).atan()*255.0/(PI/2.0);
 				factor = modified_max_intensity/max_intensity;
 			}
 			pixels.push((pixel[0]*factor) as u8);
@@ -60,13 +63,14 @@ impl DataForDrawing {
 			width: data_for_storing.width,
 			height: data_for_storing.height,
 			image_scale_factor: data_for_storing.image_scale_factor,
+			number_of_rays_total: data_for_storing.number_of_rays_total,
 			pixels,
 		}
 	}
 }
 
-pub fn make_file(width: u32, height: u32, image_scale_factor: u32, renderer_output_aggregate: &mut RendererOutput, text_filename: &String, image_filename: &String) {
-	let data_for_storing = DataForStoring::new(width, height, image_scale_factor, renderer_output_aggregate);
+pub fn make_file(width: u32, height: u32, image_scale_factor: u32, renderer_output_aggregate: &mut RendererOutput, text_filename: &String, image_filename: &String, number_of_rays_total: u64) {
+	let data_for_storing = DataForStoring::new(width, height, image_scale_factor, number_of_rays_total, renderer_output_aggregate);
 	let write_result = write_frame(&text_filename, &data_for_storing);
 	match write_result {
 		Err(e) => {

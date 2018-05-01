@@ -192,9 +192,11 @@ impl Renderer {
 			let pos = (y*self.width*self.image_scale_factor+x) as usize;
 			renderer_output.number_of_rays[pos] += 1;
 			// Store information about the ray.
+			/*
 			renderer_output.pixels[pos].bins[(((pixel[0]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][0] += 1;
 			renderer_output.pixels[pos].bins[(((pixel[1]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][1] += 1;
 			renderer_output.pixels[pos].bins[(((pixel[2]*2.0).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][2] += 1;
+			*/
 			renderer_output.pixels[pos].color = add(renderer_output.pixels[pos].color, pixel);
 			renderer_output.colors[pos] = add(renderer_output.colors[pos], pixel);
 		} else {
@@ -214,28 +216,6 @@ impl Renderer {
 		if (triangle_hit && !sphere_hit) || (triangle_hit && sphere_hit && triangle_distance < sphere_distance) {
 			*intersection = add(*intersection, mul(triangle_distance, *direction));
 			*normal = self.scene.triangle_surfaces[triangle_index].normal;
-			/*
-			*direction = pick_reflection_uniform(*normal, pcg);
-			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
-			*color = mul(dot(*normal, *direction)*2.0, *color);
-			*/
-			/*
-			*direction = pick_reflection_lambertian(*normal, pcg);
-			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
-			*/
-			/*
-			*specular_probability = self.scene.triangle_surfaces[triangle_index].specular_probability;
-			*refractive_index = self.scene.triangle_surfaces[triangle_index].refractive_index;
-			*maximum_specular_angle = self.scene.triangle_surfaces[triangle_index].maximum_specular_angle;
-			*direction = pick_reflection_uniform(*normal, pcg);
-			if dot(incoming_direction, *normal) < 0.0 {
-				//println!("Wrong direction in compute_ray_object_intersection, triangle, {}.", dot(incoming_direction, *normal));
-				return false;
-			}
-			let brdf = brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability);
-			*color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color(intersection);
-			*color = mul(brdf, *color);
-			*/
 			*specular_probability = self.scene.triangle_surfaces[triangle_index].specular_probability;
 			*refractive_index = self.scene.triangle_surfaces[triangle_index].refractive_index;
 			*maximum_specular_angle = self.scene.triangle_surfaces[triangle_index].maximum_specular_angle;
@@ -247,28 +227,6 @@ impl Renderer {
 		} else {
 			*intersection = add(*intersection, mul(sphere_distance, *direction));
 			*normal = normalised(sub(*intersection, self.scene.sphere_surfaces[sphere_index].center));
-			/*
-			*direction = pick_reflection_uniform(*normal, pcg);
-			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
-			*color = mul(dot(*normal, *direction)*2.0, *color);
-			*/
-			/*
-			*direction = pick_reflection_lambertian(*normal, pcg);
-			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
-			*/
-			/*
-			*specular_probability = self.scene.sphere_surfaces[sphere_index].specular_probability;
-			*refractive_index = self.scene.sphere_surfaces[sphere_index].refractive_index;
-			*maximum_specular_angle = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
-			*direction = pick_reflection_uniform(*normal, pcg);
-			if dot(incoming_direction, *normal) < 0.0 {
-				//println!("Wrong direction in compute_ray_object_intersection, sphere, {}.", dot(incoming_direction, *normal));
-				return false;
-			}
-			let brdf = brdf(incoming_direction, *direction, *normal, *maximum_specular_angle, *refractive_index, *specular_probability);
-			*color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color(intersection);
-			*color = mul(brdf, *color);
-			*/
 			*specular_probability = self.scene.sphere_surfaces[sphere_index].specular_probability;
 			*refractive_index = self.scene.sphere_surfaces[sphere_index].refractive_index;
 			*maximum_specular_angle = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
