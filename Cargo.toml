@@ -4,18 +4,22 @@ version = "0.1.0"
 authors = ["Christian <christian-carlsson@outlook.com>"]
 
 [dependencies]
-serde = "1.0.30"
-serde_derive = "1.0.30"
-serde_json = "1.0.11"
-png = "0.11.0"
-cgmath = "0.16.0"
-pcg_rand = "0.7.1"
-rand = "0.4.2"
-simd = "0.2.1"
-time = "0.1.39"
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+png = "*"
+cgmath = "*"
+pcg_rand = "*"
+rand = "*"
+simd = "*"
+time = "*"
 
 [features]
 
 [profile.release]
-lto = true
+opt-level = 3
 debug = false
+lto = true
+codegen-units = 1
+incremental = false
+overflow-checks = false
