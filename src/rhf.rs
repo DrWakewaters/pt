@@ -76,7 +76,7 @@ impl RHF {
 		}
 		color_result
 	}
-	pub fn kolmogorov_smirnov_distance(&self, pixel_indices: &Vec<(i32, i32)>) -> f32 {
+	pub fn kolmogorov_smirnov_distance(&self, pixel_indices: &[(i32, i32)]) -> f32 {
 		let mut max_distances: Vec<f32> = Vec::new();
 		for pixel_index in pixel_indices {
 			let mut cummulative_0 = [0.0, 0.0, 0.0];
