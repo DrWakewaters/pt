@@ -1,8 +1,10 @@
-use math::dot;
+//use math::dot;
 use trianglephysics::TrianglePhysics;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TriangleFast {
+	/*
+	// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.159.5135&rep=rep1&type=pdf
 	pub n_u: f64,
 	pub n_v: f64,
 	pub n_d: f64,
@@ -21,10 +23,42 @@ pub struct TriangleFast {
 	pub invisible_for_camera_ray: bool,
 	pub is_lightsource: bool,
 	pub is_opaque: bool,
+	*/
+	pub node0: [f64; 3],
+	pub node1: [f64; 3],
+	pub node2: [f64; 3],
+	pub e1: [f64; 3],
+	pub e2: [f64; 3],
+	pub normal: [f64; 3],
+	pub color: [f64; 3],
+	pub specular_probability: f64,
+	pub maximum_specular_angle: f64,
+	pub refractive_index: f64,
+	pub is_lightsource: bool,
+	pub is_opaque: bool,
+	pub invisible_for_camera_ray: bool,
+	pub is_surface: bool,
 }
 
 impl TriangleFast {
 	pub fn new(triangle_physics: &TrianglePhysics) -> Self {
+		Self {
+			node0: triangle_physics.node0,
+			node1: triangle_physics.node1,
+			node2: triangle_physics.node2,
+			e1: triangle_physics.e1,
+			e2: triangle_physics.e2,
+			normal: triangle_physics.normal,
+			color: triangle_physics.color,
+			specular_probability: triangle_physics.specular_probability,
+			maximum_specular_angle: triangle_physics.maximum_specular_angle,
+			refractive_index: triangle_physics.refractive_index,
+			is_lightsource: triangle_physics.is_lightsource,
+			is_opaque: triangle_physics.is_opaque,
+			invisible_for_camera_ray: triangle_physics.invisible_for_camera_ray,
+			is_surface: triangle_physics.is_surface,
+		}
+		/*
 		let b = triangle_physics.e2;
 		let c = triangle_physics.e1;
 		let node0 = triangle_physics.node0;
@@ -63,6 +97,7 @@ impl TriangleFast {
 			is_lightsource: triangle_physics.is_lightsource,
 			is_opaque: triangle_physics.is_opaque,
 		}
+		*/
 	}
 
 	pub fn compute_intersection_color(&self) -> [f64; 3] {

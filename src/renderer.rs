@@ -3,14 +3,16 @@ use std::f64;
 use rand::{OsRng, Rng};
 use pcg_rand::Pcg32;
 
-use math::{add, brdf, dot, elementwise_mul, mul, norm, normalised, pick_reflection_from_brdf, sub};
+use math::{add, brdf, cross, dot, elementwise_mul, mul, norm, normalised, pick_reflection_from_brdf, sub};
 use ray::Ray;
 use rendereroutput::RendererOutput;
 use sceneforrendering::SceneForRendering;
+use tracing::Tracing;
+use tracing::Tracing::{Bidirectional, Importance, Light};
 
 use NUMBER_OF_BINS;
 
-static MODULO: [usize; 5] = [0, 1, 2, 0, 1];
+//static MODULO: [usize; 5] = [0, 1, 2, 0, 1];
 
 pub struct Renderer {
 	pub width: u32,
@@ -29,20 +31,61 @@ impl Renderer {
 		}
 	}
 
-	pub fn render(&mut self, number_of_rays: u64, trace_from_eye: bool, write_percentage: bool) -> RendererOutput {
+	pub fn render(&mut self, number_of_rays: u64, tracing: Tracing, write_percentage: bool) -> RendererOutput {
 		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
 		let mut renderer_output = RendererOutput::new(self.width, self.height, self.image_scale_factor);
-		if trace_from_eye {
-			self.perform_work_from_eye(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
-		} else {
-			self.perform_work_sphere_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
-			//self.perform_work_triangle_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+		match tracing {
+			Bidirectional => {
+				//self.perform_work_bidirectional(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+			}
+			Importance => {
+				self.perform_work_from_eye(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+			}
+			Light => {
+				self.perform_work_sphere_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+				//self.perform_work_triangle_lightsource(&mut pcg, &mut renderer_output, number_of_rays, write_percentage);
+			}
 		}
 		renderer_output
 	}
 
+	// from eye: p -> sp1 -> sp2 -> sp3. Continue until the ray doesn't hit anything - no russian roulette. pinhole is always the same point. the retina is not part of the path, but the direction is chosen such that the same number of rays will have originate from each pixel on the retina.
+	// from light: l -> sl1 -> sl2 -> sl3. Continue until the ray doesn't hit anything - no russian roulette. light is chosen randomly on the surface of the lightsource
+	// connect and compute: say that we want to connect sp2 and sl2, that is make the path l -> sl1 -> sl2 => sp2 -> sp1 -> p,
+	// then we just multiply the colors along the path, and multiply by a weight between sl2 and sp2. Computing this weight is a bit difficult but is done as follows:
+
+	/*
+	let f = brdf(incoming_direction, direction_to_retina, ray.normal_at_origin, ray.maximum_specular_angle_at_origin, ray.refractive_index_at_origin, ray.specular_probability_at_origin);
+	let cos_retina = dot(direction_to_retina, retina_normal);
+	let distance = norm(sub(ray.origin, pinhole));
+	let pinhole_radius = 1.0;
+	let alpha = (pinhole_radius/distance).atan();
+	let proportion = 1.0 - alpha.cos();
+	let color = mul(1_000_000.0*f*proportion*(1.0/(cos_retina*cos_retina*cos_retina)), ray.color);
+	*/
+
+	// l -> sl1 => p (light tracing with forcing to pinhole)
+	// l => sp1 -> p (importance tracing with forcing to lightsource)
+	// l => p (light or importance tracing - forcing directly between pinhole and lightsource)
+	// How to trace if there is just one surface, s, between the pinhole and the lightsource? This surface can be a mirror!
+
+	/*
 	#[allow(dead_code)]
-	fn perform_work_from_eye(&mut self, mut pcg: &mut Pcg32, mut renderer_output: &mut RendererOutput, number_of_rays: u64, write_percentage: bool) {
+	fn perform_work_bidirectional(&mut self, mut pcg: &mut Pcg32, renderer_output: &mut RendererOutput, number_of_rays: u64, write_percentage: bool) {
+		/*
+		let ray_path_from_eye: Vec<> = Vec::new();
+		let ray_path_from_light: Vec<> = Vec::new();
+		for i in 0..number_of_rays {
+			let ray_path_from_eye = build_ray_path_from_eye();
+			let ray_path_from_light = build_ray_path_from_light();
+			connect_ray_paths(ray_path_from_eye, ray_path_from_light);
+		}
+		*/
+	}
+	*/
+
+	#[allow(dead_code)]
+	fn perform_work_from_eye(&mut self, mut pcg: &mut Pcg32, renderer_output: &mut RendererOutput, number_of_rays: u64, write_percentage: bool) {
 		let spp = number_of_rays/((self.width*self.image_scale_factor*self.height*self.image_scale_factor) as u64);
 		let pinhole = [500.0, 500.0, -1000.0];
 		let retina = [500.0, 500.0, 0.0];
@@ -56,8 +99,8 @@ impl Renderer {
 					let ry = pcg.next_f64();
 					let position = add(retina, [(x as f64)+rx-500.0, (y as f64)+ry-500.0, 0.0]);
 					let direction = normalised(sub(position, pinhole));
-					let mut ray = Ray::new(position, direction, direction, [0.0, 0.0, 1.0], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0);
-					let color = self.compute_from_eye(&mut ray, &mut pcg, &mut renderer_output);
+					let mut ray = Ray::new(position, direction, direction, [0.0, 0.0, 1.0], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0, 1.0);
+					let color = self.compute_from_eye(&mut ray, &mut pcg);
 					let pos = (y*self.width*self.image_scale_factor+x) as usize;
 					renderer_output.number_of_rays[pos] += 1;
 					// Store information about the ray.
@@ -73,29 +116,27 @@ impl Renderer {
 		}
 	}
 
-	fn compute_from_eye(&mut self, mut ray: &mut Ray, mut pcg: &mut Pcg32, mut renderer_output: &mut RendererOutput) -> [f64; 3] {
-		let (hit_object, is_lightsource, color) = self.compute_ray_object_intersection(&mut ray, &mut pcg, false);
-		if !hit_object {
-			return [0.0, 0.0, 0.0];
-		}
+	fn compute_from_eye(&mut self, mut ray: &mut Ray, mut pcg: &mut Pcg32) -> [f64; 3] {
+		let mut pixel_color: [f64; 3] = [1.0, 1.0, 1.0];
 		let bullet_probability = 0.05;
 		let survival_boost_factor = 1.0/(1.0-bullet_probability);
-		let r = pcg.next_f64();
-		if r < bullet_probability {
-			return [0.0, 0.0, 0.0];
+		loop {
+			let r = pcg.next_f64();
+			if r < bullet_probability {
+				pixel_color = [0.0, 0.0, 0.0];
+				break;
+			}
+			let (hit_object, is_lightsource, color) = self.compute_ray_object_intersection(&mut ray, &mut pcg, false);
+			if !hit_object {
+				pixel_color = [0.0, 0.0, 0.0];
+				break;
+			}
+			pixel_color = mul(survival_boost_factor, elementwise_mul(pixel_color, color));
+			if is_lightsource {
+				break;
+			}
 		}
-		let emittance = if is_lightsource {
-			color
-		} else {
-			[0.0, 0.0, 0.0]
-		};
-		return mul(survival_boost_factor, add(emittance, elementwise_mul(color, self.compute_from_eye(ray, pcg, renderer_output))));
-
-		if is_lightsource {
-			// @TODO Maybe the emittance is not 1.0?
-			return mul(survival_boost_factor, add(color, self.compute_from_eye(ray, pcg, renderer_output)));
-		}
-		return mul(survival_boost_factor, elementwise_mul(color, self.compute_from_eye(ray, pcg, renderer_output)));
+		pixel_color
 	}
 
 	#[allow(dead_code)]
@@ -138,7 +179,7 @@ impl Renderer {
 			}
 			self.force_light_to_eye(&mut ray, &mut renderer_output);
 			ray.old_direction = ray.direction;
-			let (hit_object, is_lightsource, color) = self.compute_ray_object_intersection(&mut ray, &mut pcg, false);
+			let (hit_object, _, color) = self.compute_ray_object_intersection(&mut ray, &mut pcg, false);
 			if hit_object {
 				ray.color = elementwise_mul(ray.color, color);
 			} else {
@@ -208,8 +249,8 @@ impl Renderer {
 		let mut color = [0.0, 0.0, 0.0];
 		let mut is_lightsource = false;
 		//println!("position = {:?}, direction = {:?}", ray.origin, ray.direction);
-		let (triangle_hit, triangle_index, triangle_distance, triangle_is_lightsource) = self.compute_ray_triangle_intersection(ray.origin, ray.direction, camera_ray);
-		let (sphere_hit, sphere_index, sphere_distance, sphere_is_lightsource) = self.compute_ray_sphere_intersection(ray.origin, ray.direction, camera_ray);
+		let (triangle_hit, triangle_index, triangle_distance, triangle_is_lightsource, triangle_refractive_index, triangle_is_opaque) = self.compute_ray_triangle_intersection(ray.origin, ray.direction, camera_ray);
+		let (sphere_hit, sphere_index, sphere_distance, sphere_is_lightsource, sphere_refractive_index, sphere_is_opaque) = self.compute_ray_sphere_intersection(ray.origin, ray.direction, camera_ray);
 		// The ray hit nothing.
 		if !triangle_hit && !sphere_hit {
 			return (false, is_lightsource, color);
@@ -220,27 +261,25 @@ impl Renderer {
 			ray.origin = add(ray.origin, mul(triangle_distance, ray.direction));
 			ray.normal_at_origin = self.scene.triangle_surfaces[triangle_index].normal;
 			ray.specular_probability_at_origin = self.scene.triangle_surfaces[triangle_index].specular_probability;
-			ray.refractive_index_at_origin = self.scene.triangle_surfaces[triangle_index].refractive_index;
 			ray.maximum_specular_angle_at_origin = self.scene.triangle_surfaces[triangle_index].maximum_specular_angle;
-			ray.direction = pick_reflection_from_brdf(incoming_direction, ray.normal_at_origin, ray.maximum_specular_angle_at_origin, ray.refractive_index_at_origin, ray.specular_probability_at_origin, pcg);
-			if dot(incoming_direction, ray.normal_at_origin) < 0.0 {
-				return (false, is_lightsource, color);
-			}
+			let (output_direction, output_refractive_index) = pick_reflection_from_brdf(incoming_direction, ray.normal_at_origin, ray.maximum_specular_angle_at_origin, ray.refractive_index_at_origin, triangle_refractive_index, ray.specular_probability_at_origin, triangle_is_opaque, pcg);
+			ray.direction = output_direction;
+			ray.refractive_index_at_origin_in_direction = output_refractive_index;
 			is_lightsource = triangle_is_lightsource;
-			//ray.color = elementwise_mul(self.scene.triangle_surfaces[triangle_index].compute_intersection_color(), ray.color);
 			color = self.scene.triangle_surfaces[triangle_index].compute_intersection_color();
 		} else {
 			ray.origin = add(ray.origin, mul(sphere_distance, ray.direction));
 			ray.normal_at_origin = normalised(sub(ray.origin, self.scene.sphere_surfaces[sphere_index].center));
-			ray.specular_probability_at_origin = self.scene.sphere_surfaces[sphere_index].specular_probability;
-			ray.refractive_index_at_origin = self.scene.sphere_surfaces[sphere_index].refractive_index;
-			ray.maximum_specular_angle_at_origin = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
-			ray.direction = pick_reflection_from_brdf(incoming_direction, ray.normal_at_origin, ray.maximum_specular_angle_at_origin, ray.refractive_index_at_origin, ray.specular_probability_at_origin, pcg);
-			if dot(incoming_direction, ray.normal_at_origin) < 0.0 {
-				return (false, is_lightsource, color);
+			if dot(ray.normal_at_origin, ray.direction) < 0.0 {
+				// If we hit a sphere boundary from the inside.
+				ray.normal_at_origin = mul(-1.0, ray.normal_at_origin);
 			}
+			ray.specular_probability_at_origin = self.scene.sphere_surfaces[sphere_index].specular_probability;
+			ray.maximum_specular_angle_at_origin = self.scene.sphere_surfaces[sphere_index].maximum_specular_angle;
+			let (output_direction, output_refractive_index) = pick_reflection_from_brdf(incoming_direction, ray.normal_at_origin, ray.maximum_specular_angle_at_origin, ray.refractive_index_at_origin, sphere_refractive_index, ray.specular_probability_at_origin, sphere_is_opaque, pcg);
+			ray.direction = output_direction;
+			ray.refractive_index_at_origin_in_direction = output_refractive_index;
 			is_lightsource = sphere_is_lightsource;
-			//ray.color = elementwise_mul(self.scene.sphere_surfaces[sphere_index].compute_intersection_color(), ray.color);
 			color = self.scene.sphere_surfaces[sphere_index].compute_intersection_color();
 		}
 		(true, is_lightsource, color)
@@ -248,8 +287,8 @@ impl Renderer {
 
 	// Find the distance to the closest sphere or triangle of a given ray.
 	fn compute_ray_object_distance(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> f64 {
-		let (_, _, triangle_distance, _) = self.compute_ray_triangle_intersection(intersection, direction, camera_ray);
-		let (_, _, sphere_distance, _) = self.compute_ray_sphere_intersection(intersection, direction, camera_ray);
+		let (_, _, triangle_distance, _, _, _) = self.compute_ray_triangle_intersection(intersection, direction, camera_ray);
+		let (_, _, sphere_distance, _, _, _) = self.compute_ray_sphere_intersection(intersection, direction, camera_ray);
 		if triangle_distance < sphere_distance {
 			triangle_distance
 		} else {
@@ -258,16 +297,20 @@ impl Renderer {
 	}
 
 	// Find the closest triangle intersection of a given ray.
-	fn compute_ray_triangle_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64, bool) {
+	// See http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.189.5084&rep=rep1&type=pdf.
+	fn compute_ray_triangle_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64, bool, f64, bool) {
 		let mut triangle_hit = false;
 		let mut triangle_index = 0;
 		let mut triangle_distance = f64::MAX;
 		let mut triangle_is_lightsource = false;
+		let mut triangle_refractive_index = 1.0;
+		let mut triangle_is_opaque = true;
 		// Compute information about the closest hit.
 		for (i, t) in self.scene.triangle_surfaces.iter().enumerate() {
 			if camera_ray && t.invisible_for_camera_ray {
 				continue;
 			}
+			/*
 			let k = t.k as usize;
 			let u = MODULO[(t.k+1) as usize];
 			let v = MODULO[(t.k+2) as usize];
@@ -285,21 +328,48 @@ impl Renderer {
 			let mue = hu*t.c_nu+hv*t.c_nv+t.c_d;
 			if mue < 0.0 || lambda+mue > 1.0 {
 				continue;
+			}*/
+			let h = cross(direction, t.e2);
+			let a = dot(t.e1, h);
+			if a.abs() < 1.0e-6 {
+				continue;
+			}
+			let f = 1.0/a;
+			let s = sub(intersection, t.node0);
+			let u = f*dot(s, h);
+			if u < 0.0 || u > 1.0 {
+				continue;
+			}
+			let q = cross(s, t.e1);
+			let v = f*dot(direction, q);
+			if v < 0.0 || u+v > 1.0 {
+				continue;
+			}
+			let d = f*dot(t.e2, q);
+			if d < 1.0e-6 {
+				continue;
+			}
+			if d > triangle_distance {
+				continue;
 			}
 			triangle_hit = true;
 			triangle_index = i;
 			triangle_distance = d;
 			triangle_is_lightsource = t.is_lightsource;
+			triangle_refractive_index = t.refractive_index;
+			triangle_is_opaque = t.is_opaque;
 		}
-		(triangle_hit, triangle_index, triangle_distance, triangle_is_lightsource)
+		(triangle_hit, triangle_index, triangle_distance, triangle_is_lightsource, triangle_refractive_index, triangle_is_opaque)
 	}
 
 	// Find the closest sphere intersection of a given ray.
-	fn compute_ray_sphere_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64, bool) {
+	fn compute_ray_sphere_intersection(&self, intersection: [f64; 3], direction: [f64; 3], camera_ray: bool) -> (bool, usize, f64, bool, f64, bool) {
 		let mut sphere_hit = false;
 		let mut sphere_index = 0;
 		let mut sphere_distance = f64::MAX;
 		let mut sphere_is_lightsource = false;
+		let mut sphere_refractive_index = 1.0;
+		let mut sphere_is_opaque = true;
 		// Compute information about the closest hit.
 		for (i, s) in self.scene.sphere_surfaces.iter().enumerate() {
 			if camera_ray && s.invisible_for_camera_ray {
@@ -323,8 +393,10 @@ impl Renderer {
 				sphere_index = i;
 				sphere_distance = d;
 				sphere_is_lightsource = s.is_lightsource;
+				sphere_refractive_index = s.refractive_index;
+				sphere_is_opaque = s.is_opaque
 			}
 		}
-		(sphere_hit, sphere_index, sphere_distance, sphere_is_lightsource)
+		(sphere_hit, sphere_index, sphere_distance, sphere_is_lightsource, sphere_refractive_index, sphere_is_opaque)
 	}
 }

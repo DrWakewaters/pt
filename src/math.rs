@@ -174,6 +174,7 @@ pub fn pick_reflection_uniform(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
     let phi = 2.0*PI*r1;
     let p = (1.0-r2*r2).sqrt();
 	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
 	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
 }
 
@@ -190,6 +191,7 @@ pub fn pick_reflection_uniform_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_
     let phi = 2.0*PI*r1;
     let p = (1.0-r2*r2).sqrt();
 	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
 	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
 }
 
@@ -201,6 +203,7 @@ pub fn pick_reflection_lambertian(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3]
 	let costheta = r1.sqrt();
 	let phi = 2.0*PI*r2;
 	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
 	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
 }
 
@@ -218,20 +221,21 @@ pub fn pick_reflection_lambertian_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, m
 	let costheta = r1.sqrt();
 	let phi = 2.0*PI*r2;
 	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
 	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
 }
 
 #[allow(dead_code)]
-pub fn pick_reflection_from_brdf(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64, pcg: &mut Pcg32) -> [f64; 3] {
+pub fn pick_reflection_from_brdf(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_1: f64, eta_2: f64, ks: f64, is_opaque: bool, pcg: &mut Pcg32) -> ([f64; 3], f64) {
 	let r = pcg.next_f64();
 	if r < ks {
-		return pick_reflection_specular(wi, n, maximum_specular_angle, eta_2, pcg);
+		return pick_reflection_specular(wi, n, maximum_specular_angle, eta_1, eta_2, is_opaque, pcg);
 	}
-	pick_reflection_lambertian(n, pcg)
+	(pick_reflection_lambertian(n, pcg), eta_1)
 }
 
 #[allow(dead_code)]
-pub fn pick_reflection_specular(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, pcg: &mut Pcg32) -> [f64; 3] {
+pub fn pick_reflection_specular(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_1: f64, eta_2: f64, is_opaque: bool, pcg: &mut Pcg32) -> ([f64; 3], f64) {
 	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
 	// Find phi: the angle we will rotate wo away from specular_direction, and theta: the angle we will then rotate wo around specular_direction.
 	let mut rx = pcg.next_f64();
@@ -261,9 +265,30 @@ pub fn pick_reflection_specular(wi: [f64; 3], n: [f64; 3], maximum_specular_angl
 	let x_1 = cos_theta/norm(reflection_perpendicular_specular);
 	let x_2 = sin_theta/norm(w);
 	let reflection_perpendicular_specular_rotation = mul(norm(reflection_perpendicular_specular), add(mul(x_1, reflection_perpendicular_specular), mul(x_2, w)));
-	add(reflection_perpendicular_specular_rotation, reflection_parallell_specular)
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
+	let wo = normalised(add(reflection_perpendicular_specular_rotation, reflection_parallell_specular));
+	if is_opaque {
+		return (wo, eta_1);
+	}
+	let h = normalised(add(wi, wo));
+	let ratio_reflected = compute_f(wi, h, eta_1, eta_2);
+	let r = pcg.next_f64();
+	if r < ratio_reflected {
+		(wo, eta_1)
+	} else {
+		let r = eta_1/eta_2;
+		let c = dot(h, wi);
+		let radicand = 1.0-r*r*(1.0-c*c);
+		if radicand < 0.0 {
+			println!("Negative radicand. Should not happen. The radicand is {}.", radicand);
+		}
+		let wo_transmitted = (add(mul(-1.0*r, wi), mul(r*c-radicand.sqrt(), h)), eta_2);
+		wo_transmitted
+
+	}
 }
 
+// @TODO: Some energy is transmitted, so the value returned should be smaller than this!
 #[allow(dead_code)]
 pub fn brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64) -> f64 {
 	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
@@ -271,13 +296,51 @@ pub fn brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64
 	let b = min(maximum_specular_angle, PI/2.0 - dot(n, specular_direction));
 	let specular = if phi < b {
 		let a = 1.0/(2.0*PI*(b-b.sin()));
-		 ks*2.0*PI*a*(b-phi)
+		ks*2.0*PI*a*(b-phi)
 	} else {
 		0.0
 	};
 	let diffuse = (1.0-ks)*2.0*dot(wo, n);
 	diffuse + specular
 }
+
+#[allow(dead_code)]
+pub fn compute_f(wi: [f64; 3], n: [f64; 3], eta_1: f64, eta_2: f64) -> f64 {
+	let cos_theta_i = dot(wi, n);
+	let cos_theta_i_square = cos_theta_i*cos_theta_i;
+	let sin_theta_i_square = 1.0-cos_theta_i_square;
+
+	// Total internal reflection.
+	if sin_theta_i_square.sqrt() >= eta_2/eta_1 {
+//		println!("Total internal reflection. eta_1 = {}, eta_2 = {}", eta_1, eta_2);
+		return 1.0;
+	}
+
+	let sin_theta_t_square = (eta_1/eta_2)*(eta_1/eta_2)*sin_theta_i_square;
+	let cos_theta_t = (1.0-sin_theta_t_square).sqrt();
+
+	let eta_1_cos_theta_i = eta_1*cos_theta_i;
+	let eta_2_cos_theta_t = eta_2*cos_theta_t;
+	let r_transverse_sqrt = (eta_1_cos_theta_i - eta_2_cos_theta_t)/(eta_1_cos_theta_i + eta_2_cos_theta_t);
+	let r_transverse = r_transverse_sqrt*r_transverse_sqrt;
+
+	let eta_2_cos_theta_i = eta_2*cos_theta_i;
+	let eta_1_cos_theta_t = eta_1*cos_theta_t;
+	let r_parallell_sqrt = (eta_2_cos_theta_i - eta_1_cos_theta_t)/(eta_2_cos_theta_i + eta_1_cos_theta_t);
+	let r_parallell = r_parallell_sqrt*r_parallell_sqrt;
+
+	(r_transverse+r_parallell)/2.0
+}
+
+#[allow(dead_code)]
+pub fn min(left: f64, right: f64) -> f64 {
+	if left < right {
+		left
+	} else {
+		right
+	}
+}
+
 /*
 #[allow(dead_code)]
 pub fn brdf_ct(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], a: f64, eta_2: f64, ks: f64) -> f64 {
@@ -305,26 +368,6 @@ pub fn compute_d(wo: [f64; 3], n: [f64; 3], h: [f64; 3], a: f64) -> f64 {
 }
 
 #[allow(dead_code)]
-pub fn compute_f(wi: [f64; 3], h: [f64; 3], n: [f64; 3], eta_1: f64, eta_2: f64) -> f64 {
-	let cos_theta_i = dot(wi, n);
-	let cos_theta_i_square = cos_theta_i*cos_theta_i;
-	let sin_theta_t_square = (eta_1/eta_2)*(eta_1/eta_2)*(1.0-cos_theta_i_square);
-	let cos_theta_t = 1.0-sin_theta_t_square;
-
-	let eta_1_cos_theta_i = eta_1*cos_theta_i;
-	let eta_2_cos_theta_t = eta_2*cos_theta_t;
-	let r_transverse_sqrt = (eta_1_cos_theta_i - eta_2_cos_theta_t)/(eta_1_cos_theta_i + eta_2_cos_theta_t);
-	let r_transverse = r_transverse_sqrt*r_transverse_sqrt;
-
-	let eta_2_cos_theta_i = eta_2*cos_theta_i;
-	let eta_1_cos_theta_t = eta_1*cos_theta_t;
-	let r_parallell_sqrt = (eta_2_cos_theta_i - eta_1_cos_theta_t)/(eta_2_cos_theta_i + eta_1_cos_theta_t);
-	let r_parallell = r_parallell_sqrt*r_parallell_sqrt;
-
-	(r_transverse+r_parallell)/2.0
-}
-*/
-#[allow(dead_code)]
 pub fn compute_g(wi: [f64; 3], wo: [f64; 3], h: [f64; 3], n: [f64; 3], a: f64) -> f64 {
 	let gpwo = compute_gp(wo, h, n, a);
 	let gpwi = compute_gp(wi, h, n, a);
@@ -348,12 +391,4 @@ pub fn compute_xi(x: f64) -> f64 {
 	}
 	0.0
 }
-
-#[allow(dead_code)]
-pub fn min(left: f64, right: f64) -> f64 {
-	if left < right {
-		left
-	} else {
-		right
-	}
-}
+*/

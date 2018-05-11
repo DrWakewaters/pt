@@ -47,6 +47,6 @@ impl SphereLightsource {
 		let direction = pick_reflection_lambertian(normal, &mut pcg);
 		let old_direction = direction;
 		let color = self.color;
-		Ray::new(point, direction, old_direction, normal, color, 0.0, 1.0, 0.0)
+		Ray::new(point, direction, old_direction, normal, color, 0.0, 1.0, 0.0, 1.0)
 	}
 }

@@ -9,6 +9,7 @@ use rendereroutput::RendererOutput;
 use rhf::RHF;
 use sceneforphysics::SceneForPhysics;
 use sceneforrendering::SceneForRendering;
+use tracing::Tracing;
 
 use NUMBER_OF_BINS;
 
@@ -25,11 +26,11 @@ pub struct Pathtracer {
 	pub number_of_scales: i32,
 	pub number_of_rays: u64,
 	pub perform_post_process: bool,
-	pub trace_from_eye: bool,
+	pub tracing: Tracing,
 }
 
 impl Pathtracer {
-	pub fn new(width: u32, height: u32, image_scale_factor: u32, frame_number: u32, number_of_threads_render: usize, number_of_threads_post_process: usize, continue_old_simulation: bool, post_process_data: Vec<(f32, i32)>, search_window_radius: i32, number_of_scales: i32, number_of_rays: u64, perform_post_process: bool, trace_from_eye: bool) -> Self {
+	pub fn new(width: u32, height: u32, image_scale_factor: u32, frame_number: u32, number_of_threads_render: usize, number_of_threads_post_process: usize, continue_old_simulation: bool, post_process_data: Vec<(f32, i32)>, search_window_radius: i32, number_of_scales: i32, number_of_rays: u64, perform_post_process: bool, tracing: Tracing) -> Self {
 		Self {
 			width,
 			height,
@@ -43,7 +44,7 @@ impl Pathtracer {
 			number_of_scales,
 			number_of_rays,
 			perform_post_process,
-			trace_from_eye,
+			tracing,
 		}
 	}
 
@@ -115,9 +116,9 @@ impl Pathtracer {
 		let mut renderer_output = RendererOutput::new(self.width, self.height, self.image_scale_factor);
 		for i in 0_usize..self.number_of_threads_render {
 			let scene_for_rendering_clone = scene_for_rendering.clone();
-			let (width, height, image_scale_factor, number_of_rays, trace_from_eye, write_percentage) = (self.width, self.height, self.image_scale_factor, self.number_of_rays, self.trace_from_eye, i == 0);
+			let (width, height, image_scale_factor, number_of_rays, tracing, write_percentage) = (self.width, self.height, self.image_scale_factor, self.number_of_rays, self.tracing, i == 0);
 			threads.push(spawn(move || {
-				Renderer::new(width, height, image_scale_factor, scene_for_rendering_clone).render(number_of_rays, trace_from_eye, write_percentage)
+				Renderer::new(width, height, image_scale_factor, scene_for_rendering_clone).render(number_of_rays, tracing, write_percentage)
 			}));
 		}
 		for (i, thread) in threads.into_iter().enumerate() {

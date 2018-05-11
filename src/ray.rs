@@ -7,10 +7,11 @@ pub struct Ray {
 	pub maximum_specular_angle_at_origin: f64,
 	pub refractive_index_at_origin: f64,
 	pub specular_probability_at_origin: f64,
+	pub refractive_index_at_origin_in_direction: f64,
 }
 
 impl Ray {
-	pub fn new(origin: [f64; 3], direction: [f64; 3], old_direction: [f64; 3], normal_at_origin: [f64; 3], color: [f64; 3], maximum_specular_angle_at_origin: f64, refractive_index_at_origin: f64, specular_probability_at_origin: f64) -> Self {
+	pub fn new(origin: [f64; 3], direction: [f64; 3], old_direction: [f64; 3], normal_at_origin: [f64; 3], color: [f64; 3], maximum_specular_angle_at_origin: f64, refractive_index_at_origin: f64, specular_probability_at_origin: f64, refractive_index_at_origin_in_direction: f64) -> Self {
 		Self {
 			origin,
 			direction,
@@ -20,6 +21,7 @@ impl Ray {
 			maximum_specular_angle_at_origin,
 			refractive_index_at_origin,
 			specular_probability_at_origin,
+			refractive_index_at_origin_in_direction,
 		}
 	}
 }

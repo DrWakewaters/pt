@@ -34,7 +34,7 @@ impl TriangleLightsource {
 		loop {
 			let point = add(add(mul(pcg.next_f64(), self.e1), mul(pcg.next_f64(), self.e2)), self.node0);
 			if point_in_triangle(point, self.node0, self.node1, self.node2) {
-				return Ray::new(point, self.normal, self.normal, self.normal, self.color, 0.0, 1.0, 0.0);
+				return Ray::new(point, self.normal, self.normal, self.normal, self.color, 0.0, 1.0, 0.0, 1.0);
 			}
 		}
 	}

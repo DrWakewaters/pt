@@ -37,6 +37,7 @@ mod pathtracer;
 mod pixel;
 mod pngfile;
 mod ray;
+mod tracing;
 mod renderer;
 mod rendereroutput;
 mod rhf;
@@ -50,10 +51,15 @@ mod trianglelightsource;
 mod trianglephysics;
 
 use pathtracer::Pathtracer;
+use tracing::Tracing;
 
-const NUMBER_OF_BINS: usize = 2;
+const NUMBER_OF_BINS: usize = 32;
 
 fn main() {
-	let mut pathtracer = Pathtracer::new(1000, 1000, 1, 0, 8, 3, false, vec![(3.0, 1)], 10, 1, 100_000_000, false, false);
+	let mut pathtracer = Pathtracer::new(1000, 1000, 1, 0, 8, 3, false, vec![(0.3, 1)], 5, 1, 800_000_000, false, Tracing::Importance);
 	pathtracer.render_images_to_png();
 }
+
+// 80_000_000 3 min
+// 800_000_000 30 min
+// 16_000_000_000 10h

@@ -1,5 +1,5 @@
-use pcg_rand::Pcg32;
-use rand::{OsRng, Rng};
+//use pcg_rand::Pcg32;
+//use rand::{OsRng, Rng};
 
 use collisiontype::CollisionType;
 use math::{add, distance, distance_squared, dot, mul, normalised, quarternion_inverse, quarternion_product, same_side, sub};
@@ -14,7 +14,6 @@ pub struct SceneForPhysics {
 
 impl SceneForPhysics {
 	pub fn new() -> Self {
-		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
 		let nodes = vec![
         	// Top
 			[0.0, 0.0, 0.0],           // 0
@@ -44,36 +43,48 @@ impl SceneForPhysics {
 		];
 		let red = [0.9, 0.1, 0.1];
 		let green = [0.1, 0.9, 0.1];
-		*/
 		let nodes_light_wall = vec![
 			[0.0, 100.0, -600.0],
 			[0.0, 1100.0, -600.0],
 			[1000.0, 1100.0, 0.0],
 			[1000.0, 100.0, 0.0],
 		];
+		*/
 		let grey = [0.9, 0.9, 0.9];
 		let specular_probability_diffuse = 0.0;
 		let maximum_specular_angle_diffuse = 0.0;
-		let specular_probability_specular = 0.0;
-		let maximum_specular_angle_specular = 0.5;
+		let specular_probability_specular = 1.0;
+		let maximum_specular_angle_specular = 0.1;
 		let refractive_index = 2.0;
 		let sphere_radius = 150.0;
-		let lightsource_sphere_radius = 50.0;
+		let lightsource_sphere_radius = 100.0;
+		let glass_sphere_radius = 100.0;
 		let local_x = [1.0, 0.0, 0.0];
 		let local_y = [0.0, 1.0, 0.0];
 		let local_z = [0.0, 0.0, 1.0];
 		let mass = 1000.0;
 		let inertia_diagonal = 2.0/5.0*mass*sphere_radius*sphere_radius;
 		let inertia = [[inertia_diagonal, 0.0, 0.0], [0.0, inertia_diagonal, 0.0], [0.0, 0.0, inertia_diagonal]];
-		let spheres_to_add = 3;
+		let spheres_to_add = 5;
 		let mut remaining_spheres_to_add = spheres_to_add;
 		let mut spheres: Vec<SpherePhysics> = Vec::new();
-		let positions = [[500.0, 1000.0-(lightsource_sphere_radius+1.0e-3), 500.0], [700.0, 1000.0-(sphere_radius+1.0e-3), 700.0], [300.0, 1000.0-(sphere_radius+1.0e-3), 700.0]];
+		let positions = [[500.0, 1000.0-(lightsource_sphere_radius+1.0e-3), 200.0], [700.0, 1000.0-(sphere_radius+1.0e-3), 700.0], [300.0, 1000.0-(sphere_radius+1.0e-3), 700.0], [600.0, 1000.0-(glass_sphere_radius+1.0e-3), 450.0], [850.0, 1000.0-(glass_sphere_radius+1.0e-3), 300.0]];
 		while remaining_spheres_to_add > 0 {
 			let index = spheres_to_add-remaining_spheres_to_add;
+			let radius = match index {
+				0 => {
+					lightsource_sphere_radius
+				}
+				3 | 4 => {
+					glass_sphere_radius
+				}
+				_ => {
+					sphere_radius
+				}
+			};
 			let mut add_sphere = true;
 			for sphere in &spheres {
-				if distance(sphere.center, positions[index]) <= sphere.radius + sphere_radius {
+				if distance(sphere.center, positions[index]) <= radius + sphere_radius {
 					add_sphere = false;
 				}
 			}
@@ -86,20 +97,21 @@ impl SceneForPhysics {
 			} else {
 				false
 			};
-			let radius = if index == 0 {
-				lightsource_sphere_radius
+			let is_opaque = if index == 3 || index == 4 {
+				false
 			} else {
-				sphere_radius
+				true
 			};
 			let maximum_specular_angle = maximum_specular_angle_specular;
 			let specular_probability = specular_probability_specular;
+			let invisible_for_camera_ray = false;
+			let is_surface = true;
 			if add_sphere {
-				spheres.push(SpherePhysics::new(positions[index], radius, color_sphere, color_sphere, local_x, local_y, local_z, rotational_axis, rotational_angular_speed, specular_probability, maximum_specular_angle, refractive_index, is_lightsource, true, v, inertia, mass, false, true));
+				spheres.push(SpherePhysics::new(positions[index], radius, color_sphere, color_sphere, local_x, local_y, local_z, rotational_axis, rotational_angular_speed, specular_probability, maximum_specular_angle, refractive_index, is_lightsource, is_opaque, v, inertia, mass, invisible_for_camera_ray, is_surface));
 				remaining_spheres_to_add -= 1;
 			}
 		}
         let triangles = vec![
-
 			// Left wall.
             TrianglePhysics::new(&nodes, [0, 4, 5], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false, true),
             TrianglePhysics::new(&nodes, [0, 5, 1], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false, true),
@@ -118,8 +130,6 @@ impl SceneForPhysics {
             // Ceiling.
             TrianglePhysics::new(&nodes, [0, 1, 2], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false, true),
             TrianglePhysics::new(&nodes, [0, 2, 3], grey, specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, false, true, false, true),
-			// Light wall.
-
 			/*
 			// Sunlight.
 			TrianglePhysics::new(&nodes_light_wall, [0, 2, 1], [1.0, 1.0, 1.0], specular_probability_diffuse, maximum_specular_angle_diffuse, refractive_index, true, true, true, true),
