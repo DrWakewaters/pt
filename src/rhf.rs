@@ -6,7 +6,6 @@ use NUMBER_OF_BINS;
 pub struct RHF {
 	pub width: i32,
 	pub height: i32,
-	pub image_scale_factor: i32,
 	pub max_distance: f32,
 	pub patch_radius: i32,
 	pub search_window_radius: i32,
@@ -21,17 +20,16 @@ pub struct RHF {
 }
 
 impl RHF {
-	pub fn new(width: i32, height: i32, image_scale_factor: i32, max_distance: f32, patch_radius: i32, search_window_radius: i32, number_of_scales: i32, vertical_start: i32, vertical_end: i32, number_of_rays: Vec<u32>, colors: Vec<[f64; 3]>, bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>) -> Self {
+	pub fn new(width: i32, height: i32, max_distance: f32, patch_radius: i32, search_window_radius: i32, number_of_scales: i32, vertical_start: i32, vertical_end: i32, number_of_rays: Vec<u32>, colors: Vec<[f64; 3]>, bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>) -> Self {
 		let mut colors_denoised: Vec<[f64; 3]> = Vec::new();
 		let mut counter: Vec<f64> = Vec::new();
-		for _ in 0..width*height*image_scale_factor*image_scale_factor {
+		for _ in 0..width*height {
 			colors_denoised.push([0.0, 0.0, 0.0]);
 			counter.push(0.0);
 		}
 		Self {
 			width,
 			height,
-			image_scale_factor,
 			max_distance,
 			patch_radius,
 			search_window_radius,
@@ -48,7 +46,7 @@ impl RHF {
 
 	pub fn rhf(&mut self) -> Vec<[f64; 3]> {
 		for y_0 in self.vertical_start..self.vertical_end {
-			for x_0 in 0..self.width*self.image_scale_factor  {
+			for x_0 in 0..self.width {
 				for y_1 in y_0-self.search_window_radius..y_0+self.search_window_radius+1 {
 					for x_1 in x_0-self.search_window_radius..x_0+self.search_window_radius+1 {
 						let pixel_indices = self.compute_pixel_indices(y_0, x_0, y_1, x_1);
@@ -64,8 +62,8 @@ impl RHF {
 				}
 			}
 		}
-		let first_index = (self.vertical_start*self.width*self.image_scale_factor) as usize;
-		let last_index = (self.vertical_end*self.width*self.image_scale_factor) as usize;
+		let first_index = (self.vertical_start*self.width) as usize;
+		let last_index = (self.vertical_end*self.width) as usize;
 		let mut color_result: Vec<[f64; 3]> = Vec::new();
 		for i in first_index..last_index {
 			if self.counter[i].abs() < 1e-6 {
@@ -122,13 +120,13 @@ impl RHF {
 				let y_1_shifted = y_1_middle+vertical_shift;
 				let x_0_shifted = x_0_middle+horizontal_shift;
 				let x_1_shifted = x_1_middle+horizontal_shift;
-				if y_0_shifted < 0 || y_1_shifted < 0 || y_0_shifted >= self.height*self.image_scale_factor || y_1_shifted >= self.height*self.image_scale_factor {
+				if y_0_shifted < 0 || y_1_shifted < 0 || y_0_shifted >= self.height || y_1_shifted >= self.height {
 					continue;
 				}
-				if x_0_shifted < 0 || x_1_shifted < 0 || x_0_shifted >= self.width*self.image_scale_factor || x_1_shifted >= self.width*self.image_scale_factor {
+				if x_0_shifted < 0 || x_1_shifted < 0 || x_0_shifted >= self.width || x_1_shifted >= self.width {
 					continue;
 				}
-				pixel_indices.push((y_0_shifted*self.width*self.image_scale_factor+x_0_shifted, y_1_shifted*self.width*self.image_scale_factor+x_1_shifted));
+				pixel_indices.push((y_0_shifted*self.width+x_0_shifted, y_1_shifted*self.width+x_1_shifted));
 			}
 		}
 		pixel_indices

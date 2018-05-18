@@ -32,23 +32,26 @@ extern crate time;
 mod collisiontype;
 mod datafordrawing;
 mod dataforstoring;
+mod hitpoint;
+mod light;
+mod material;
 mod math;
 mod pathtracer;
+mod physics;
+mod physicsscene;
+mod physicssphere;
+mod physicstriangle;
 mod pixel;
 mod pngfile;
 mod ray;
-mod tracing;
 mod renderer;
 mod rendereroutput;
+mod rendererscene;
+mod renderershape;
+mod renderersphere;
+mod renderertriangle;
 mod rhf;
-mod sceneforrendering;
-mod sceneforphysics;
-mod spherefast;
-mod spherelightsource;
-mod spherephysics;
-mod trianglefast;
-mod trianglelightsource;
-mod trianglephysics;
+mod tracing;
 
 use pathtracer::Pathtracer;
 use tracing::Tracing;
@@ -56,7 +59,7 @@ use tracing::Tracing;
 const NUMBER_OF_BINS: usize = 32;
 
 fn main() {
-	let mut pathtracer = Pathtracer::new(1000, 1000, 1, 0, 8, 3, false, vec![(0.3, 1)], 5, 1, 800_000_000, false, Tracing::Importance);
+	let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, 3, false, vec![(0.3, 1)], 5, 1, 1_000_000_000, false, Tracing::Light);
 	pathtracer.render_images_to_png();
 }
 

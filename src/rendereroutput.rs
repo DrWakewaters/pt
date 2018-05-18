@@ -8,11 +8,11 @@ pub struct RendererOutput {
 }
 
 impl RendererOutput {
-	pub fn new(width: u32, height: u32, image_scale_factor: u32) -> Self {
+	pub fn new(width: u32, height: u32) -> Self {
 		let mut number_of_rays: Vec<u32> = Vec::new();
 		let mut pixels: Vec<Pixel> = Vec::new();
 		let mut colors: Vec<[f64; 3]> = Vec::new();
-		for _ in 0..width*height*image_scale_factor*image_scale_factor {
+		for _ in 0..width*height {
 			number_of_rays.push(0);
 			pixels.push(Pixel::new());
 			colors.push([0.0, 0.0, 0.0]);

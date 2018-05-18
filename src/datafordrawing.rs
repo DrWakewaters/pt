@@ -6,7 +6,6 @@ use dataforstoring::DataForStoring;
 pub struct DataForDrawing {
 	pub width: u32,
 	pub height: u32,
-	pub image_scale_factor: u32,
 	number_of_rays_total: u64,
 	pub pixels: Vec<u8>
 }
@@ -23,9 +22,7 @@ impl DataForDrawing {
 				max_intensity = pixel[2];
 			}
 			let factor = if max_intensity > 1.0e-9 {
-				// From eye:  divide by 250 000 000
-				// From light: divide by 8 000 000
-				let modified_max_intensity = (max_intensity/((data_for_storing.number_of_rays_total as f64)/25_000_000.0)).atan()*255.0/(PI/2.0);
+				let modified_max_intensity = (max_intensity/((data_for_storing.number_of_rays_total as f64)/2_000_000.0)).atan()*255.0/(PI/2.0);
 				modified_max_intensity/max_intensity
 			} else {
 				1.0
@@ -37,7 +34,6 @@ impl DataForDrawing {
 		DataForDrawing {
 			width: data_for_storing.width,
 			height: data_for_storing.height,
-			image_scale_factor: data_for_storing.image_scale_factor,
 			number_of_rays_total: data_for_storing.number_of_rays_total,
 			pixels,
 		}

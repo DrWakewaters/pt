@@ -8,10 +8,10 @@ use serde_json::{from_str, to_string};
 use datafordrawing::DataForDrawing;
 use dataforstoring::DataForStoring;
 use rendereroutput::RendererOutput;
-use sceneforphysics::SceneForPhysics;
+use physicsscene::PhysicsScene;
 
-pub fn make_file(width: u32, height: u32, image_scale_factor: u32, renderer_output_aggregate: &mut RendererOutput, text_filename: &str, image_filename: &str, number_of_rays_total: u64) {
-	let data_for_storing = DataForStoring::new(width, height, image_scale_factor, number_of_rays_total, renderer_output_aggregate);
+pub fn make_file(width: u32, height: u32, renderer_output_aggregate: &mut RendererOutput, text_filename: &str, image_filename: &str, number_of_rays_total: u64) {
+	let data_for_storing = DataForStoring::new(width, height, number_of_rays_total, renderer_output_aggregate);
 	let write_result = write_frame(&text_filename, &data_for_storing);
 	if let Err(e) = write_result {
 		println!("{:?}", e);
@@ -50,25 +50,25 @@ fn read_frame(text_filename: &str) -> Result<DataForStoring, Error> {
 fn draw_frame(image_filename: &str, data_for_drawing: &DataForDrawing) -> Result<(), Error> {
 	let file = File::create(image_filename)?;
 	let buf_writer = &mut BufWriter::new(file);
-	let mut encoder = Encoder::new(buf_writer, data_for_drawing.width*data_for_drawing.image_scale_factor, data_for_drawing.height*data_for_drawing.image_scale_factor);
+	let mut encoder = Encoder::new(buf_writer, data_for_drawing.width, data_for_drawing.height);
 	encoder.set(ColorType::RGB).set(BitDepth::Eight);
 	let mut writer = encoder.write_header()?;
 	writer.write_image_data(&data_for_drawing.pixels)?;
 	Ok(())
 }
 
-pub fn write_scene(text_filename: &str, scene: &SceneForPhysics) -> Result<(), Error> {
+pub fn write_scene(text_filename: &str, scene: &PhysicsScene) -> Result<(), Error> {
 	let serialized = to_string(scene)?;
 	let mut file = File::create(text_filename)?;
 	file.write_all(serialized.as_bytes())?;
 	Ok(())
 }
 
-pub fn read_scene(text_filename: &str) -> Result<SceneForPhysics, Error> {
+pub fn read_scene(text_filename: &str) -> Result<PhysicsScene, Error> {
 	let file = File::open(text_filename)?;
 	let mut serialized = String::new();
 	let mut buf_reader = BufReader::new(file);
 	buf_reader.read_to_string(&mut serialized)?;
-	let deserialized: SceneForPhysics = from_str(&serialized)?;
+	let deserialized: PhysicsScene = from_str(&serialized)?;
 	Ok(deserialized)
 }

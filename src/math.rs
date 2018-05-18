@@ -3,6 +3,8 @@ use std::f64::consts::PI;
 use pcg_rand::Pcg32;
 use rand::Rng;
 
+use material::Material;
+
 #[inline(always)]
 #[allow(dead_code)]
 pub fn add(left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
@@ -167,88 +169,65 @@ pub fn make_basis_vectors(v1: [f64; 3]) -> ([f64; 3], [f64; 3], [f64; 3]) {
 	(u1_normalised, u2_normalised, u3_normalised)
 }
 
-#[allow(dead_code)]
-pub fn pick_reflection_uniform(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
+// See http://mathworld.wolfram.com/SpherePointPicking.html.
+pub fn random_uniform_on_sphere(pcg: &mut Pcg32) -> [f64; 3] {
 	let r1 = pcg.next_f64();
 	let r2 = pcg.next_f64();
-    let phi = 2.0*PI*r1;
-    let p = (1.0-r2*r2).sqrt();
-	let (t3, t1, t2) = make_basis_vectors(normal);
-	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
-	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
+    let theta = 2.0*PI*r1;
+	let u = 2.0*(r2-0.5);
+    let p = (1.0-u*u).sqrt();
+	normalised([p*theta.cos(), p*theta.sin(), u])
 }
 
+// A Ray hits a RendererShape.
+// First, determine if the interaction is specular or diffuse.
+// Then, pick a random specular or lambertian reflection direction.
+// Then, if the object is opaque, the iteraction will be a reflection. Return the random reflection direction which was picked.
+// If it's not opaque, compute which micro normal is needed to get the random reflection direction.
+// For that normal and incoming direction, compute the probability of a reflection, and then either reflect or transmit the ray.
 #[allow(dead_code)]
-pub fn pick_reflection_uniform_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta: f64, max_theta: f64) -> [f64; 3] {
-	let r2_sqrt_min = max_theta.cos();
-	let r2_sqrt_max = min_theta.cos();
-	let r2_min = r2_sqrt_min*r2_sqrt_min;
-	let r2_max = r2_sqrt_max*r2_sqrt_max;
-	let r1 = pcg.next_f64();
-	let mut r2 = pcg.next_f64();
-	r2 *= r2_max-r2_min;
-	r2 += r2_min;
-    let phi = 2.0*PI*r1;
-    let p = (1.0-r2*r2).sqrt();
-	let (t3, t1, t2) = make_basis_vectors(normal);
-	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
-	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
-}
-
-#[allow(dead_code)]
-pub fn pick_reflection_lambertian(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
-	let r1 = pcg.next_f64();
-	let r2 = pcg.next_f64();
-	let sintheta = (1.0-r1).sqrt();
-	let costheta = r1.sqrt();
-	let phi = 2.0*PI*r2;
-	let (t3, t1, t2) = make_basis_vectors(normal);
-	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
-	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
-}
-
-#[allow(dead_code)]
-pub fn pick_reflection_lambertian_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta: f64, max_theta: f64) -> [f64; 3] {
-	let r1_sqrt_min = min_theta.cos();
-	let r1_sqrt_max = max_theta.cos();
-	let r1_min = r1_sqrt_min*r1_sqrt_min;
-	let r1_max = r1_sqrt_max*r1_sqrt_max;
-	let mut r1 = pcg.next_f64();
-	r1 *= r1_max-r1_min;
-	r1 += r1_min;
-	let r2 = pcg.next_f64();
-	let sintheta = (1.0-r1).sqrt();
-	let costheta = r1.sqrt();
-	let phi = 2.0*PI*r2;
-	let (t3, t1, t2) = make_basis_vectors(normal);
-	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
-	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
-}
-
-#[allow(dead_code)]
-pub fn pick_reflection_from_brdf(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_1: f64, eta_2: f64, ks: f64, is_opaque: bool, pcg: &mut Pcg32) -> ([f64; 3], f64) {
-	let r = pcg.next_f64();
-	if r < ks {
-		return pick_reflection_specular(wi, n, maximum_specular_angle, eta_1, eta_2, is_opaque, pcg);
+pub fn random_from_brdf(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, pcg: &mut Pcg32) -> ([f64; 3], bool) {
+	let mut r = pcg.next_f64();
+	let outgoing_direction = if r < material.specular_probability {
+		random_specular_on_hemisphere(incoming_direction, normal, material, pcg)
+	} else {
+		random_lambertian_on_hemisphere(normal, pcg)
+	};
+	if material.is_opaque {
+		return (outgoing_direction, true)
 	}
-	(pick_reflection_lambertian(n, pcg), eta_1)
+	println!("WRONG");
+	let micro_normal = normalised(add(incoming_direction, outgoing_direction));
+	// @TODO Fix the refractive indices.
+	let refractive_index_1 = 1.0;
+	let refractive_index_2 = 1.0;
+	let refractive_indices_ratio = refractive_index_2/refractive_index_1;
+	let ratio_reflected = compute_f(incoming_direction, micro_normal, refractive_index_1, refractive_index_2);
+	r = pcg.next_f64();
+	if r < ratio_reflected {
+		(outgoing_direction, true)
+	} else {
+		// @TODO Fix the refractive indices.
+		let cos_theta = dot(micro_normal, incoming_direction);
+		let radicand = 1.0-refractive_indices_ratio*refractive_indices_ratio*(1.0-cos_theta*cos_theta);
+		if radicand < 0.0 {
+			println!("Negative radicand. Should not happen. The radicand is {}.", radicand);
+		}
+		(add(mul(-1.0*refractive_indices_ratio, incoming_direction), mul(refractive_indices_ratio*cos_theta-radicand.sqrt(), micro_normal)), false)
+	}
 }
 
 #[allow(dead_code)]
-pub fn pick_reflection_specular(wi: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_1: f64, eta_2: f64, is_opaque: bool, pcg: &mut Pcg32) -> ([f64; 3], f64) {
-	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
+pub fn random_specular_on_hemisphere(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, pcg: &mut Pcg32) -> [f64; 3] {
+	let specular_direction = sub(mul(2.0*dot(incoming_direction, normal), normal), incoming_direction);
 	// Find phi: the angle we will rotate wo away from specular_direction, and theta: the angle we will then rotate wo around specular_direction.
 	let mut rx = pcg.next_f64();
 	let ry = pcg.next_f64();
 	if ry > rx {
 		rx = ry;
 	}
-	let mut b = maximum_specular_angle;
-	let angle_to_surface = PI/2.0 - dot(n, specular_direction);
-	if b > angle_to_surface {
-		b = angle_to_surface;
-	}
-	let phi = b*rx;
+	let maximum_angle = min(PI/2.0 - dot(normal, specular_direction).acos(), material.maximum_specular_angle);
+	let phi = maximum_angle*rx;
 	// Perform the rotations of wo around specular_direction.
 	// First rotate away from specular_direction by rotating around the x-axis. See https://en.wikipedia.org/wiki/Rotation_matrix. (Any axis would do though, as long as it is not parallel with specular_direction.)
 	let cos_phi = phi.cos();
@@ -266,42 +245,44 @@ pub fn pick_reflection_specular(wi: [f64; 3], n: [f64; 3], maximum_specular_angl
 	let x_2 = sin_theta/norm(w);
 	let reflection_perpendicular_specular_rotation = mul(norm(reflection_perpendicular_specular), add(mul(x_1, reflection_perpendicular_specular), mul(x_2, w)));
 	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
-	let wo = normalised(add(reflection_perpendicular_specular_rotation, reflection_parallell_specular));
-	if is_opaque {
-		return (wo, eta_1);
-	}
-	let h = normalised(add(wi, wo));
-	let ratio_reflected = compute_f(wi, h, eta_1, eta_2);
-	let r = pcg.next_f64();
-	if r < ratio_reflected {
-		(wo, eta_1)
-	} else {
-		let r = eta_1/eta_2;
-		let c = dot(h, wi);
-		let radicand = 1.0-r*r*(1.0-c*c);
-		if radicand < 0.0 {
-			println!("Negative radicand. Should not happen. The radicand is {}.", radicand);
-		}
-		let wo_transmitted = (add(mul(-1.0*r, wi), mul(r*c-radicand.sqrt(), h)), eta_2);
-		wo_transmitted
+	normalised(add(reflection_perpendicular_specular_rotation, reflection_parallell_specular))
+}
 
+pub fn random_lambertian_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
+	let r1 = pcg.next_f64();
+	let r2 = pcg.next_f64();
+	let sintheta = (1.0-r1).sqrt();
+	let costheta = r1.sqrt();
+	let phi = 2.0*PI*r2;
+	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
+	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
+}
+
+// A Ray hits a RendererShape.
+// Compute the brdf both for a diffuse interaction and for a specular interaction and compute the weighted average.
+// @TODO Support transmission.
+pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
+	let brdf_specular = brdf_specular(incoming_direction, outgoing_direction, normal, material);
+	let brdf_lambertian = brdf_lambertian(incoming_direction, outgoing_direction, normal, material);
+	material.specular_probability*brdf_specular + (1.0-material.specular_probability)*brdf_lambertian
+}
+
+fn brdf_specular(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
+	let halfway_vector = normalised(add(incoming_direction, outgoing_direction));
+	let specular_direction = sub(mul(2.0*dot(incoming_direction, normal), normal), incoming_direction);
+	let phi = dot(outgoing_direction, specular_direction).acos();
+	let maximum_angle = min(PI/2.0 - dot(normal, specular_direction), material.maximum_specular_angle);
+	if phi < maximum_angle {
+		let a = 1.0/(2.0*PI*(maximum_angle-maximum_angle.sin()));
+		2.0*PI*a*(maximum_angle-phi)
+	} else {
+		0.0
 	}
 }
 
-// @TODO: Some energy is transmitted, so the value returned should be smaller than this!
-#[allow(dead_code)]
-pub fn brdf(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], maximum_specular_angle: f64, eta_2: f64, ks: f64) -> f64 {
-	let specular_direction =  sub(mul(2.0*dot(wi, n), n), wi);
-	let phi = dot(wo, specular_direction).acos();
-	let b = min(maximum_specular_angle, PI/2.0 - dot(n, specular_direction));
-	let specular = if phi < b {
-		let a = 1.0/(2.0*PI*(b-b.sin()));
-		ks*2.0*PI*a*(b-phi)
-	} else {
-		0.0
-	};
-	let diffuse = (1.0-ks)*2.0*dot(wo, n);
-	diffuse + specular
+fn brdf_lambertian(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
+	2.0*dot(outgoing_direction, normal)
 }
 
 #[allow(dead_code)]
@@ -342,6 +323,52 @@ pub fn min(left: f64, right: f64) -> f64 {
 }
 
 /*
+
+pub fn random_uniform_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
+	let r1 = pcg.next_f64();
+	let r2 = pcg.next_f64();
+    let phi = 2.0*PI*r1;
+    let p = (1.0-r2*r2).sqrt();
+	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
+	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
+}
+
+#[allow(dead_code)]
+pub fn random_lambertian_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta: f64, max_theta: f64) -> [f64; 3] {
+	let r1_sqrt_min = min_theta.cos();
+	let r1_sqrt_max = max_theta.cos();
+	let r1_min = r1_sqrt_min*r1_sqrt_min;
+	let r1_max = r1_sqrt_max*r1_sqrt_max;
+	let mut r1 = pcg.next_f64();
+	r1 *= r1_max-r1_min;
+	r1 += r1_min;
+	let r2 = pcg.next_f64();
+	let sintheta = (1.0-r1).sqrt();
+	let costheta = r1.sqrt();
+	let phi = 2.0*PI*r2;
+	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
+	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
+}
+
+#[allow(dead_code)]
+pub fn random_uniform_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta: f64, max_theta: f64) -> [f64; 3] {
+	let r2_sqrt_min = max_theta.cos();
+	let r2_sqrt_max = min_theta.cos();
+	let r2_min = r2_sqrt_min*r2_sqrt_min;
+	let r2_max = r2_sqrt_max*r2_sqrt_max;
+	let r1 = pcg.next_f64();
+	let mut r2 = pcg.next_f64();
+	r2 *= r2_max-r2_min;
+	r2 += r2_min;
+    let phi = 2.0*PI*r1;
+    let p = (1.0-r2*r2).sqrt();
+	let (t3, t1, t2) = make_basis_vectors(normal);
+	// Might not be perfectly normalised due to rounding errors. Thus, normalise!
+	normalised(add(add(mul(p*phi.cos(), t1), mul(p*phi.sin(), t2)), mul(r2, t3)))
+}
+
 #[allow(dead_code)]
 pub fn brdf_ct(wi: [f64; 3], wo: [f64; 3], n: [f64; 3], a: f64, eta_2: f64, ks: f64) -> f64 {
 	let eta_1 = 1.0;
