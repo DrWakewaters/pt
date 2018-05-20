@@ -175,11 +175,10 @@ impl Pathtracer {
 				if i == self.number_of_threads_post_process - 1 {
 					vertical_end = self.height as i32;
 				}
-				println!("v_start = {:?}, v_end = {:?}", vertical_start, vertical_end);
 				threads.push(spawn(move || {
 					RHF::new(width, height, max_distance, patch_radius, search_window_radius, number_of_scales, vertical_start, vertical_end, number_of_rays, colors, bins).rhf()
-					}));
-				}
+				}));
+			}
 			renderer_output.colors = Vec::new();
 			for thread in threads {
 				let result = thread.join();

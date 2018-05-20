@@ -5,14 +5,14 @@ use math::random_uniform_on_sphere;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Light {
     pub position: [f64; 3],
-    pub emission: [f64; 3],
+    pub color: [f64; 3],
 }
 
 impl Light {
-    pub fn new(position: [f64; 3], emission: [f64; 3]) -> Self {
+    pub fn new(position: [f64; 3], color: [f64; 3]) -> Self {
         Self {
             position,
-            emission,
+            color,
         }
     }
 

@@ -1,3 +1,4 @@
+use camera::Camera;
 use collisiontype::CollisionType;
 use math::{add, distance_squared, dot, mul, normalised, quarternion_inverse, quarternion_product, same_side, sub};
 use light::Light;
@@ -11,6 +12,7 @@ pub struct PhysicsScene {
 	pub physics_triangles: Vec<PhysicsTriangle>,
 	pub physics_spheres: Vec<PhysicsSphere>,
 	pub lights: Vec<Light>,
+	pub cameras: Vec<Camera>,
 }
 
 impl PhysicsScene {
@@ -54,7 +56,7 @@ impl PhysicsScene {
 		//let sphere_grey_specular_transparent_1 = PhysicsSphere::new([600.0, 1000.0-(middle_radius+1.0e-3), 450.0], middle_radius, grey_specular_transparent, physics_1);
 		//let sphere_grey_specular_transparent_2 = PhysicsSphere::new([850.0, 1000.0-(middle_radius+1.0e-3), 300.0], middle_radius, grey_specular_transparent, physics_1);
 
-		let physics_spheres = vec![sphere_red_specular_opaque, sphere_red_diffuse_opaque];
+		let physics_spheres = vec![/*sphere_red_specular_opaque, sphere_red_diffuse_opaque*/];
 
 		let physics_triangles = vec![
 			// Left wall.
@@ -79,10 +81,14 @@ impl PhysicsScene {
 		let lights = vec![
 			Light::new([500.0, 1000.0-(middle_radius+1.0e-3), 400.0], [1.0, 1.0, 1.0]),
 		];
+		let cameras = vec! [
+			Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0]),
+		];
 		Self {
 			physics_spheres,
 			physics_triangles,
 			lights,
+			cameras,
 		}
 	}
 

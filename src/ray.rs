@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Ray {
 	pub position: [f64; 3],
 	pub direction: [f64; 3],

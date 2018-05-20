@@ -22,7 +22,7 @@ impl DataForDrawing {
 				max_intensity = pixel[2];
 			}
 			let factor = if max_intensity > 1.0e-9 {
-				let modified_max_intensity = (max_intensity/((data_for_storing.number_of_rays_total as f64)/2_000_000.0)).atan()*255.0/(PI/2.0);
+				let modified_max_intensity = (max_intensity/((data_for_storing.number_of_rays_total as f64)/1500_000.0)).atan()*255.0/(PI/2.0);
 				modified_max_intensity/max_intensity
 			} else {
 				1.0
