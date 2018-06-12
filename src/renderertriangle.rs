@@ -8,13 +8,13 @@ use renderershape::RendererShape;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RendererTriangle {
-	pub node0: [f64; 3],
-	pub node1: [f64; 3],
-	pub node2: [f64; 3],
-	pub e1: [f64; 3],
-	pub e2: [f64; 3],
-	pub normal: [f64; 3],
-	pub material: Material,
+	node0: [f64; 3],
+	node1: [f64; 3],
+	node2: [f64; 3],
+	e1: [f64; 3],
+	e2: [f64; 3],
+	normal: [f64; 3],
+	material: Material,
 }
 
 impl RendererTriangle {
@@ -36,22 +36,22 @@ impl RendererShape for RendererTriangle {
 	fn distance(&self, ray: &Ray) -> f64 {
 		let h = cross(ray.direction, self.e2);
 		let a = dot(self.e1, h);
-		if a.abs() < 1.0e-9 {
+		if a.abs() < 1.0e-6 {
 			return f64::MAX;
 		}
 		let f = 1.0/a;
 		let s = sub(ray.position, self.node0);
 		let u = f*dot(s, h);
-		if u < 1.0e-9 || u > 1.0-1.0e-9 {
+		if u < 1.0e-6 || u > 1.0-1.0e-6 {
 			return f64::MAX;
 		}
 		let q = cross(s, self.e1);
 		let v = f*dot(ray.direction, q);
-		if v < 1.0e-9 || u+v > 1.0-1.0e-9 {
+		if v < 1.0e-6 || u+v > 1.0-1.0e-6 {
 			return f64::MAX;
 		}
 		let d = f*dot(self.e2, q);
-		if d < 1.0e-9 {
+		if d < 1.0e-6 {
 			return f64::MAX;
 		}
 		d
@@ -61,7 +61,7 @@ impl RendererShape for RendererTriangle {
 		self.material
 	}
 
-	fn normal(&self, point: [f64; 3]) -> [f64; 3] {
+	fn normal(&self, _point: [f64; 3]) -> [f64; 3] {
 		self.normal
 	}
 }

@@ -8,10 +8,11 @@ pub struct Hitpoint {
     pub material: Material,
     pub hit_from_outside: bool,
     pub is_end_point: bool,
+    pub accumulated_color: [f64; 3],
 }
 
 impl Hitpoint {
-    pub fn new(position: [f64; 3], incoming_direction: [f64; 3], distance: f64, normal: [f64; 3], material: Material, hit_from_outside: bool, is_end_point: bool) -> Self {
+    pub fn new(position: [f64; 3], incoming_direction: [f64; 3], distance: f64, normal: [f64; 3], material: Material, hit_from_outside: bool, is_end_point: bool, accumulated_color: [f64; 3]) -> Self {
         Self {
             position,
             incoming_direction,
@@ -20,6 +21,7 @@ impl Hitpoint {
             material,
             hit_from_outside,
             is_end_point,
+            accumulated_color,
         }
     }
 }

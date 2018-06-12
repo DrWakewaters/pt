@@ -6,7 +6,7 @@ authors = ["Christian <christian-carlsson@outlook.com>"]
 [dependencies]
 serde = "*"
 serde_derive = "*"
-serde_json = "*"
+bincode = "*"
 png = "*"
 cgmath = "*"
 pcg_rand = "*"

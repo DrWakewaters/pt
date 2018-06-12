@@ -1,384 +1,265 @@
 use std::f64;
-use std::f64::consts::PI;
 
 use rand::{OsRng, Rng};
 use pcg_rand::Pcg32;
 
 use hitpoint::Hitpoint;
-use material::Material;
-use math::{add, brdf, dot, elementwise_mul, mul, norm, normalised, random_from_brdf, sub};
+use math::{add, brdf, dot, elementwise_mul, intensity_to_color, min, mul, norm, random_from_brdf, sub};
 use ray::Ray;
 use renderershape::RendererShape;
-use rendereroutput::RendererOutput;
+use rendereroutputrow::RendererOutputRow;
 use rendererscene::RendererScene;
-use tracing::Tracing;
-use tracing::Tracing::{Direct, Light, Importance, Bidirectional};
 
 use NUMBER_OF_BINS;
 
 //static MODULO: [usize; 5] = [0, 1, 2, 0, 1];
 
 pub struct Renderer {
-	pub width: u32,
-	pub height: u32,
-	pub number_of_rays: u64,
-	pub perform_post_process: bool,
-	pub write_percentage: bool,
-	pub tracing: Tracing,
-	pub scene: RendererScene,
+	width: u32,
+	spp_per_iteration: u32,
+	maximum_spp: u32,
+	maximum_error: f64,
+	maximum_brdf_value: f64,
+	perform_post_process: bool,
+	scene: RendererScene,
+	renderer_output_rows: Vec<RendererOutputRow>
 }
 
 impl Renderer {
-	pub fn new(width: u32, height: u32, number_of_rays: u64, perform_post_process: bool, write_percentage: bool, tracing: Tracing, scene: RendererScene) -> Self {
+	pub fn new(width: u32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, maximum_brdf_value: f64, perform_post_process: bool, scene: RendererScene) -> Self {
+		let renderer_output_rows: Vec<RendererOutputRow> = Vec::new();
 		Self {
 			width,
-			height,
-			number_of_rays,
+			spp_per_iteration,
+			maximum_spp,
+			maximum_error,
+			maximum_brdf_value,
 			perform_post_process,
-			write_percentage,
-			tracing,
 			scene,
+			renderer_output_rows,
 		}
 	}
 
-	pub fn render(&mut self) -> RendererOutput {
-		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
-		let mut renderer_output = RendererOutput::new(self.width, self.height);
-		match self.tracing {
-			Direct => {
-				self.trace(false, false, &mut pcg, &mut renderer_output);
-			}
-			Light => {
-				//self.trace(false, true, &mut pcg, &mut renderer_output);
-				self.light_tracing(&mut pcg, &mut renderer_output); // Old tracing
-}
-			Importance => {
-				self.trace(true, false, &mut pcg, &mut renderer_output);
-				//self.importance_tracing(&mut pcg, &mut renderer_output); // Old tracing
-			}
-			Bidirectional => {
-				self.trace(true, true, &mut pcg, &mut renderer_output);
-			}
-		}
-		renderer_output
+	pub fn get_renderer_output_rows(&self) -> Vec<RendererOutputRow> {
+		self.renderer_output_rows.to_vec()
 	}
 
-	fn trace(&mut self, trace_from_camera: bool, trace_from_light: bool, mut pcg: &mut Pcg32, renderer_output: &mut RendererOutput) {
-		let number_of_lights = self.scene.lights.len();
-		let random_exclusive_max_lights: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_lights as u32);
+	pub fn render(&mut self, y: u32) {
+		println!("rendering, y={}", y);
+		let number_of_light_spheres = self.scene.light_spheres.len();
+		let random_exclusive_max_lights: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_light_spheres as u32);
 		let number_of_cameras = self.scene.cameras.len();
-		let random_exclusive_max_cameras: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_cameras as u32);
-		let spp = self.number_of_rays/((self.width*self.height) as u64);
-		for x in -499..501 {
-			if x%10 == 0 && self.write_percentage {
-				println!("{:?} percent rendered", (x+500)/10);
-			}
-			for y in -499..501 {
-				for _ in 0..spp {
+		self.renderer_output_rows.push(RendererOutputRow::new(y, self.width));
+		let last_pos = self.renderer_output_rows.len()-1;
+		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
+		let mut max_iterations = 0;
+		let mut max_iterations_x_value = 0;
+		for x in 0..self.width {
+			let store_position = x as usize;
+			let mut colors: Vec<[f64; 3]> = Vec::new();
+			let mut converged = false;
+			// Loop over this pixel until we estimate the error to be small enough.
+			let mut iterations = 0;
+			while !converged {
+				iterations += 1;
+				for _ in 0..self.spp_per_iteration {
 					// Create a hitpoint path starting from the camera. The first hitpoint will be the hitpoint of the ray coming from the retina, through the pinhole of the camera - that is, it is a point somewhere on a renderer shape.
 					let mut hitpoint_path_from_camera: Vec<Hitpoint> = Vec::new();
+					self.renderer_output_rows[last_pos].number_of_rays[store_position] += 1.0;
 					let index = (pcg.gen_range(0, random_exclusive_max_lights)%(number_of_cameras as u32)) as usize;
-					let r = pcg.next_f64()*0.5;
-					let theta = pcg.next_f64()*2.0*PI;
-					let dx = theta.cos()*r*0.0;
-					let dy = theta.sin()*r*0.0;
-					let mut point_on_retina = add(self.scene.cameras[index].retina_center, [x as f64, y as f64, 0.0]);
-					let retina_position = 1000*(1000-(point_on_retina[1] as usize)) + (1000-(point_on_retina[0] as usize));
-					point_on_retina = add(point_on_retina, [dx, dy, 0.0]);
-					let direction = normalised(sub(self.scene.cameras[index].pinhole, point_on_retina));
-					let mut ray = Ray::new(self.scene.cameras[index].pinhole, direction);
+					let mut ray = self.scene.cameras[index].create_ray(x, y, self.width, &mut pcg);
 					let mut color = self.scene.cameras[index].color;
-					self.create_hitpoint_path(&mut ray, &mut color, trace_from_camera, &mut hitpoint_path_from_camera, pcg);
+					self.create_hitpoint_path(&mut ray, &mut color, &mut hitpoint_path_from_camera, &mut pcg);
+					let mut total_color = [0.0, 0.0, 0.0];
 					if hitpoint_path_from_camera.is_empty() {
+						colors.push(total_color);
 						continue;
 					}
-					// Create a hitpoint path starting from a light.
-					let mut hitpoint_path_from_light: Vec<Hitpoint> = Vec::new();
-					let index = (pcg.gen_range(0, random_exclusive_max_cameras)%(number_of_lights as u32)) as usize;
-					let mut direction = self.scene.lights[index].direction(&mut pcg);
-					let mut ray = Ray::new(self.scene.lights[index].position, direction);
-					let mut color = self.scene.lights[index].color;
-					let light_hitpoint = Hitpoint::new(ray.position, [0.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], Material::new([1.0, 1.0, 1.0], 0.0, 0.0, 1.0, false), true, true);
-					hitpoint_path_from_light.push(light_hitpoint);
-					if trace_from_light {
-						self.create_hitpoint_path(&mut ray, &mut color, true, &mut hitpoint_path_from_light, pcg);
+					// Connect the camera path hitpoints with points on lights.
+					for hitpoint_in_camera_path in &hitpoint_path_from_camera {
+						let color = self.connect_and_compute_color(hitpoint_in_camera_path, &mut pcg);
+						total_color = add(total_color, color);
 					}
-					if hitpoint_path_from_camera.is_empty() {
-						continue;
+					self.store(store_position, total_color);
+					colors.push(total_color);
+				}
+				if colors.is_empty() {
+					break;
+				}
+				// Estimate the error. If it's too large, create more rays for this pixel.
+				let number_of_batches: usize = 20;
+				let number_of_rays = colors.len();
+				let batch_size = number_of_rays/number_of_batches;
+				let mut averages = self.averages(&colors, number_of_batches, batch_size);
+				self.gamma_correct_averages(&mut averages);
+				let use_standard_deviation = true;
+				let error = if use_standard_deviation {
+					self.standard_deviation(&averages)
+				} else {
+					self.maximum_distance(&averages)
+				};
+				if iterations%10 == 0 {
+					println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}).", iterations, x, y, error, self.maximum_error);
+				}
+				if error < self.maximum_error || iterations*self.spp_per_iteration >= self.maximum_spp {
+					if iterations > max_iterations {
+						max_iterations = iterations;
+						max_iterations_x_value = x;
 					}
-					// Connect the hitpaths.
-					for hitpoint_in_light_path in &hitpoint_path_from_light {
-						for hitpoint_in_camera_path in &hitpoint_path_from_camera {
-							self.connect_and_store(hitpoint_in_light_path, hitpoint_in_camera_path, retina_position, renderer_output);
-						}
-					}
+					converged = true;
+					/*
+					let last_pos = self.renderer_output_rows.len()-1;
+					self.renderer_output_rows[last_pos].pixels[store_position].color = [iterations, iterations, iterations];
+					self.renderer_output_rows[last_pos].colors[store_position] = [iterations, iterations, iterations];
+					self.renderer_output_rows[last_pos].number_of_rays[store_position] = 1000;
+					*/
 				}
 			}
 		}
+		println!("Max iterations at ({}, {}): {}.", max_iterations_x_value, y, max_iterations);
 	}
 
-	fn create_hitpoint_path(&mut self, mut ray: &mut Ray, color: &mut [f64; 3], continue_after_first_hit: bool, hitpoint_path: &mut Vec<Hitpoint>, mut pcg: &mut Pcg32) {
-		//let bullet_probability = 0.05;
-		//let survival_boost_factor = 1.0/(1.0-bullet_probability);
+	// @TODO: Fix so that it works even if colors.len()%batch_size != 0.
+	fn averages(&self, colors: &[[f64; 3]], number_of_batches: usize, batch_size: usize) -> Vec<[f64; 3]> {
+		let mut averages: Vec<[f64; 3]> = vec![[0.0, 0.0, 0.0]; number_of_batches];
+		for i in 0..colors.len() {
+			averages[i/batch_size] = add(averages[i/batch_size], colors[i]);
+		}
+		for average in &mut averages {
+			*average = mul(1.0/(batch_size as f64), *average);
+		}
+		averages
+	}
+
+	fn gamma_correct_averages(&self, averages: &mut Vec<[f64; 3]>) {
+		for average in averages {
+			*average = intensity_to_color(*average);
+		}
+	}
+
+	fn standard_deviation(&self, averages: &[[f64; 3]]) -> f64 {
+		let length = averages.len();
+		let mut r = 0.0;
+		let mut g = 0.0;
+		let mut b = 0.0;
+		let mut r_squared = 0.0;
+		let mut g_squared = 0.0;
+		let mut b_squared = 0.0;
+		for average in averages {
+			r += average[0];
+			g += average[1];
+			b += average[2];
+			r_squared += average[0]*average[0];
+			g_squared += average[1]*average[1];
+			b_squared += average[2]*average[2];
+		}
+		((r_squared + g_squared + b_squared - (r*r+g*g+b*b)/(length as f64))/(length as f64-1.0)).sqrt()
+	}
+
+	fn maximum_distance(&self, averages: &[[f64; 3]]) -> f64 {
+		let mut smallest = [f64::MAX, f64::MAX, f64::MAX];
+		let mut largest = [f64::MIN, f64::MIN, f64::MIN];
+		for average in averages {
+			for j in 0..3 {
+				if average[j] < smallest[j] {
+					smallest[j] = average[j];
+				}
+				if average[j] > largest[j] {
+					largest[j] = average[j];
+				}
+			}
+		}
+		let max_r_distance = (largest[0]-smallest[0]).abs();
+		let max_g_distance = (largest[1]-smallest[1]).abs();
+		let max_b_distance = (largest[2]-smallest[2]).abs();
+		max_r_distance+max_g_distance+max_b_distance
+	}
+
+	fn create_hitpoint_path(&mut self, mut ray: &mut Ray, color: &mut [f64; 3], hitpoint_path: &mut Vec<Hitpoint>, pcg: &mut Pcg32) {
+		let bullet_probability = 0.05;
+		let survival_boost_factor = 1.0/(1.0-bullet_probability);
 		loop {
-			/*
 			let r = pcg.next_f64();
 			if r < bullet_probability {
 				return;
 			} else {
 				*color = mul(survival_boost_factor, *color);
 			}
-			*/
-			// @TODO Store the accumulated color in the hitpoint.
 			let hitpoint = self.closest_renderer_shape(&mut ray);
-			if let Some(hitpoint) = hitpoint {
+			if let Some(mut hitpoint) = hitpoint {
 				let ingoing_direction = mul(-1.0, ray.direction);
-				let (direction, _) = random_from_brdf(ingoing_direction, hitpoint.normal, hitpoint.material, pcg);
+				let (refractive_index_1, refractive_index_2) = if hitpoint.hit_from_outside {
+					(1.0, hitpoint.material.refractive_index)
+				} else {
+					(hitpoint.material.refractive_index, 1.0)
+				};
+				let normal = if dot(ingoing_direction, hitpoint.normal) > 0.0 {
+					hitpoint.normal
+				} else {
+					mul(-1.0, hitpoint.normal)
+				};
+				let (direction, _) = random_from_brdf(ingoing_direction, normal, hitpoint.material, refractive_index_1, refractive_index_2, pcg);
 				ray.position = hitpoint.position;
 				ray.direction = direction;
 				*color = elementwise_mul(*color, hitpoint.material.color);
+				hitpoint.accumulated_color = *color;
 				hitpoint_path.push(hitpoint);
-				return;
 			} else {
 				return;
 			}
-			if !continue_after_first_hit {
-				return;
-			}
 		}
 	}
 
-	fn connect_and_store(&self, hitpoint_in_light_path: &Hitpoint, hitpoint_in_camera_path: &Hitpoint, retina_position: usize, renderer_output: &mut RendererOutput) {
-		let direction = sub(hitpoint_in_camera_path.position, hitpoint_in_light_path.position);
-		let distance = norm(direction);
-		let direction_normalised = mul(1.0/distance, direction);
-		if dot(hitpoint_in_light_path.normal, direction_normalised) < 0.0 || dot(hitpoint_in_camera_path.normal, direction_normalised) > 0.0 {
-			return;
-		}
-		let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(hitpoint_in_light_path.position, direction_normalised));
-		if let Some(closest_hitpoint) = closest_hitpoint {
-			if distance-closest_hitpoint.distance > 1.0e-9 {
-				return;
-			}
-		}
-		let brdf_light = if hitpoint_in_light_path.is_end_point {
-			1.0 // Should be lower? 1/pi ?
-		} else {
-			//println!("{}", brdf(mul(-1.0, hitpoint_in_light_path.incoming_direction), direction_normalised, hitpoint_in_light_path.normal, hitpoint_in_light_path.material));
-			brdf(mul(-1.0, hitpoint_in_light_path.incoming_direction), direction_normalised, hitpoint_in_light_path.normal, hitpoint_in_light_path.material)
-		};
-		let brdf_camera = if hitpoint_in_camera_path.is_end_point {
-			1.0 // Should be lower? 1/pi ?
-		} else {
-			brdf(mul(-1.0, hitpoint_in_camera_path.incoming_direction), mul(-1.0, direction_normalised), hitpoint_in_camera_path.normal, hitpoint_in_camera_path.material)
-		};
-		let color = mul(1_000_000.0*brdf_light*brdf_camera/(distance*distance), elementwise_mul(hitpoint_in_light_path.material.color, hitpoint_in_camera_path.material.color));
-		self.store(retina_position, color, renderer_output);
-	}
-
-	fn store(&self, retina_position: usize, color: [f64; 3], renderer_output: &mut RendererOutput) {
-		//let pos = y*(self.width as usize)+x;
-		renderer_output.number_of_rays[retina_position] += 1;
-		renderer_output.pixels[retina_position].color = add(renderer_output.pixels[retina_position].color, color);
-		renderer_output.colors[retina_position] = add(renderer_output.colors[retina_position], color);
-		/*
-		if self.perform_post_process {
-			renderer_output.pixels[pos].bins[(((color[0]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][0] += 1;
-			renderer_output.pixels[pos].bins[(((color[1]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][1] += 1;
-			renderer_output.pixels[pos].bins[(((color[2]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][2] += 1;
-		}
-		*/
-	}
-
-
-	#[allow(dead_code)]
-	fn importance_tracing(&mut self, mut pcg: &mut Pcg32, renderer_output: &mut RendererOutput) {
-		let pinhole = [500.0, 500.0, -1000.0];
-		let retina_center = [500.0, 500.0, -2000.0];
-		let retina_normal = [0.0, 0.0, 1.0];
-		/*
-		for i in 0..self.number_of_rays {
-			if i%(self.number_of_rays/100) == 0 && self.write_percentage {
-				println!("{:?} percent rendered", (100.0*(i as f64)/(self.number_of_rays as f64)) as u32);
-			}
-			let direction = random_uniform_on_sphere(pcg);
-			let distance = dot(sub(retina_center, pinhole), retina_normal)/dot(mul(-1.0, direction), retina_normal);
-			if distance < 0.0 {
+	fn connect_and_compute_color(&self, hitpoint_in_camera_path: &Hitpoint, mut pcg: &mut Pcg32) -> [f64; 3] {
+		let number_of_light_spheres = self.scene.light_spheres.len();
+		let number_of_cameras = self.scene.cameras.len();
+		let number_of_light_connections = min(1.0/hitpoint_in_camera_path.material.maximum_specular_angle + 1.0, 10.0) as u32;
+		let mut color = [0.0, 0.0, 0.0];
+		for _ in 0..number_of_light_connections {
+			let random_exclusive_max_cameras: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_cameras as u32);
+			let index = (pcg.gen_range(0, random_exclusive_max_cameras)%(number_of_light_spheres as u32)) as usize;
+			let light_position = self.scene.light_spheres[index].get_position(&mut pcg);
+			let light_color = self.scene.light_spheres[index].color;
+			let direction = sub(hitpoint_in_camera_path.position, light_position);
+			let distance = norm(direction);
+			let direction_normalised = mul(1.0/distance, direction);
+			if dot(hitpoint_in_camera_path.normal, direction_normalised) > 0.0 {
 				continue;
 			}
-			let point_on_retina = add(mul(-1.0*distance, direction), pinhole);
-			if (point_on_retina[2] - retina_center[2]).abs() > 1.0e-6 {
-				println!("Error {}, {}", point_on_retina[2], retina_center[2]);
-			}
-			if point_on_retina[0] < 0.0 || point_on_retina[1] < 0.0 || point_on_retina[0] >= 1000.0 || point_on_retina[1] >= 1000.0 {
-				continue;
-			}
-			let x_store = (1000.0-point_on_retina[0]) as usize;
-			let y_store = (1000.0-point_on_retina[1]) as usize;
-			let mut ray = Ray::new(pinhole, direction);
-			let mut color = [1.0, 1.0, 1.0];
-			self.importance_tracing_inner(&mut ray, &mut pcg, &mut color, renderer_output, x_store, y_store);
-		}
-		*/
-		let spp = self.number_of_rays/((self.width*self.height) as u64);
-		for x in -499..501 {
-			if x%10 == 0 && self.write_percentage {
-				println!("{:?} percent rendered", (x+500)/10);
-			}
-			for y in -499..501 {
-				for _ in 0..spp {
-					let r = pcg.next_f64()*0.5;
-					let theta = pcg.next_f64()*2.0*PI;
-					let dx = theta.cos()*r;
-					let dy = theta.sin()*r;
-					let mut point_on_retina = add(retina_center, [x as f64, y as f64, 0.0]);
-					let x_store = 1000-(point_on_retina[0] as usize);
-					let y_store = 1000-(point_on_retina[1] as usize);
-					point_on_retina = add(point_on_retina, [dx, dy, 0.0]);
-					let direction = normalised(sub(pinhole, point_on_retina));
-					let mut ray = Ray::new(pinhole, direction);
-					let mut color = [1.0, 1.0, 1.0];
-					self.importance_tracing_inner(&mut ray, &mut pcg, &mut color, renderer_output, x_store, y_store);
+			let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(light_position, direction_normalised));
+			if let Some(closest_hitpoint) = closest_hitpoint {
+				if distance-closest_hitpoint.distance > 1.0e-9 {
+					continue;
 				}
 			}
-		}
-	}
-
-	#[allow(dead_code)]
-	fn light_tracing(&mut self, mut pcg: &mut Pcg32, mut renderer_output: &mut RendererOutput) {
-		let number_of_lights = self.scene.lights.len();
-		let random_exclusive_max: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_lights as u32);
-		for i in 0u64..self.number_of_rays {
-			if i%(self.number_of_rays/100) == 0 && self.write_percentage {
-				println!("{:?} percent rendered", (100.0*(i as f64)/(self.number_of_rays as f64)) as u32);
-			}
-			let light_index = (pcg.gen_range(0, random_exclusive_max)%(number_of_lights as u32)) as usize;
-			let light_position = self.scene.lights[light_index].position;
-			let light_direction = self.scene.lights[light_index].direction(pcg);
-			let mut ray = Ray::new(light_position, light_direction);
-			let mut color = [1.0, 1.0, 1.0];
-			self.light_tracing_inner(&mut ray, &mut pcg, &mut color, &mut renderer_output);
-		}
-	}
-
-	fn importance_tracing_inner(&mut self, mut ray: &mut Ray, mut pcg: &mut Pcg32, color: &mut [f64; 3], mut renderer_output: &mut RendererOutput, x_store: usize, y_store: usize) {
-		let bullet_probability = 0.05;
-		let survival_boost_factor = 1.0/(1.0-bullet_probability);
-		loop {
-			/*
-			let r = pcg.next_f64();
-			if r < bullet_probability {
-				return;
+			let ingoing_direction = mul(-1.0, hitpoint_in_camera_path.incoming_direction);
+			let outgoing_direction = mul(-1.0, direction_normalised);
+			let normal = if dot(ingoing_direction, hitpoint_in_camera_path.normal) > 0.0 {
+				hitpoint_in_camera_path.normal
 			} else {
-				*color = mul(survival_boost_factor, *color);
-			}
-			*/
-			let hitpoint = self.closest_renderer_shape(&mut ray);
-			if let Some(hitpoint) = hitpoint {
-				let ingoing_direction = mul(-1.0, ray.direction);
-				let (direction, _) = random_from_brdf(ingoing_direction, hitpoint.normal, hitpoint.material, pcg);
-				ray.position = hitpoint.position;
-				ray.direction = direction;
-				*color = elementwise_mul(*color, hitpoint.material.color);
-				self.direct_sample_lights(&mut ray, &mut pcg, ingoing_direction, *color, hitpoint.normal, hitpoint.material, &mut renderer_output, x_store, y_store);
+				mul(-1.0, hitpoint_in_camera_path.normal)
+			};
+			let (refractive_index_1, refractive_index_2) = if hitpoint_in_camera_path.hit_from_outside {
+				(1.0, hitpoint_in_camera_path.material.refractive_index)
 			} else {
-				return;
-			}
+				(hitpoint_in_camera_path.material.refractive_index, 1.0)
+			};
+			// @TODO: Get rid of the upper limit of the brdf.
+			let brdf = min(brdf(ingoing_direction, outgoing_direction, normal, refractive_index_1, refractive_index_2, hitpoint_in_camera_path.material), self.maximum_brdf_value);
+			color = add(color, mul(brdf/(distance*distance*f64::from(number_of_light_connections)), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color)));
 		}
+		color
 	}
 
-	fn light_tracing_inner(&mut self, mut ray: &mut Ray, pcg: &mut Pcg32, color: &mut [f64; 3], mut renderer_output: &mut RendererOutput) {
-		let bullet_probability = 0.05;
-		let survival_boost_factor = 1.0/(1.0-bullet_probability);
-		loop {
-			/*
-			let r = pcg.next_f64();
-			if r < bullet_probability {
-				return;
-			} else {
-				*color = mul(survival_boost_factor, *color);
-			}*/
-			let hitpoint = self.closest_renderer_shape(&mut ray);
-			if let Some(hitpoint) = hitpoint {
-				let ingoing_direction = mul(-1.0, ray.direction);
-				let (direction, _) = random_from_brdf(ingoing_direction, hitpoint.normal, hitpoint.material, pcg);
-				ray.position = hitpoint.position;
-				ray.direction = direction;
-				*color = elementwise_mul(*color, hitpoint.material.color);
-				self.direct_sample_pinhole(&mut ray, ingoing_direction, *color, hitpoint.normal, hitpoint.material, &mut renderer_output);
-				return;
-			} else {
-				return;
-			}
-		}
-	}
-
-	fn direct_sample_lights(&mut self, ray: &mut Ray, pcg: &mut Pcg32, ingoing_direction: [f64; 3], color: [f64; 3], normal: [f64; 3], material: Material, renderer_output: &mut RendererOutput, x_store: usize, y_store: usize) {
-		let index = pcg.gen_range(0, self.scene.lights.len());
-		let sample_position = self.scene.lights[index as usize].position;
-		let sample_direction = sub(sample_position, ray.position);
-		// @TODO Should this always be a condition, even with transmission?
-		if dot(normal, sample_direction) < 0.0 {
-			return;
-		}
-		let sample_distance = norm(sample_direction);
-		let sample_direction_normalised = mul(1.0/sample_distance, sample_direction);
-		let hitpoint = self.closest_renderer_shape(&mut Ray::new(ray.position, sample_direction_normalised));
-		if let Some(hit) = hitpoint {
-			if hit.distance < sample_distance {
-				return;
-			}
-		}
-		let brdf = brdf(ingoing_direction, sample_direction_normalised, normal, material);
-		let color = mul(1_000_000.0*brdf/(sample_distance*sample_distance), color);
-		self.store_old(x_store, y_store, color, renderer_output);
-	}
-
-	fn direct_sample_pinhole(&mut self, ray: &mut Ray, ingoing_direction: [f64; 3], color: [f64; 3], normal: [f64; 3], material: Material, renderer_output: &mut RendererOutput) {
-		let sample_position = [500.0, 500.0, -1000.0];
-		let sample_direction = sub(sample_position, ray.position);
-		// @TODO Should this always be a condition, even with transmission?
-		if dot(normal, sample_direction) < 0.0 {
-			return;
-		}
-		let sample_distance = norm(sample_direction);
-		let sample_direction_normalised = mul(1.0/sample_distance, sample_direction);
-		let hitpoint = self.closest_renderer_shape(&mut Ray::new(ray.position, sample_direction_normalised));
-		if let Some(hit) = hitpoint {
-			if hit.distance < sample_distance {
-				return;
-			}
-		}
-		let brdf = brdf(ingoing_direction, sample_direction_normalised, normal, material);
-		let retina_normal = [0.0, 0.0, 1.0];
-		let retina_center = [500.0, 500.0, -2000.0];
-		let distance_to_retina = dot(sub(retina_center, ray.position), retina_normal)/dot(sample_direction_normalised, retina_normal);
-		if distance_to_retina < 0.0 {
-			return;
-		}
-		let point_on_retina = add(mul(distance_to_retina, sample_direction_normalised), ray.position);
-		if (point_on_retina[2] - retina_center[2]).abs() > 1.0e-6 {
-			println!("Error {}, {}", point_on_retina[2], retina_center[2]);
-		}
-		if point_on_retina[0] < 0.0 || point_on_retina[1] < 0.0 || point_on_retina[0] >= 1000.0 || point_on_retina[1] >= 1000.0 {
-			return;
-		}
-		let x_store = (1000.0-point_on_retina[0]) as usize;
-		let y_store = (1000.0-point_on_retina[1]) as usize;
-		let color = mul(1_000_000.0*brdf/(sample_distance*sample_distance), color);
-		self.store_old(x_store, y_store, color, renderer_output);
-	}
-
-	fn store_old(&self, x_store: usize, y_store: usize, color: [f64; 3], renderer_output: &mut RendererOutput) {
-		let pos = y_store*(self.width as usize)+x_store;
-		renderer_output.number_of_rays[pos] += 1;
-		renderer_output.pixels[pos].color = add(renderer_output.pixels[pos].color, color);
-		renderer_output.colors[pos] = add(renderer_output.colors[pos], color);
+	fn store(&mut self, store_position: usize, color: [f64; 3]) {
+		let last_pos = self.renderer_output_rows.len()-1;
+		self.renderer_output_rows[last_pos].pixels[store_position].color = add(self.renderer_output_rows[last_pos].pixels[store_position].color, color);
+		self.renderer_output_rows[last_pos].colors[store_position] = add(self.renderer_output_rows[last_pos].colors[store_position], color);
 		if self.perform_post_process {
-			renderer_output.pixels[pos].bins[(((color[0]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][0] += 1;
-			renderer_output.pixels[pos].bins[(((color[1]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][1] += 1;
-			renderer_output.pixels[pos].bins[(((color[2]).atan()*2.0/PI)*(NUMBER_OF_BINS as f64)) as usize][2] += 1;
-
+			let color = intensity_to_color(color);
+			self.renderer_output_rows[last_pos].pixels[store_position].bins[(color[0]/255.0*(NUMBER_OF_BINS as f64)) as usize][0] += 1;
+			self.renderer_output_rows[last_pos].pixels[store_position].bins[(color[1]/255.0*(NUMBER_OF_BINS as f64)) as usize][1] += 1;
+			self.renderer_output_rows[last_pos].pixels[store_position].bins[(color[2]/255.0*(NUMBER_OF_BINS as f64)) as usize][2] += 1;
 		}
 	}
 
@@ -414,7 +295,8 @@ impl Renderer {
 			} else {
 				self.scene.renderer_triangles[index].material()
 			};
-			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, true, false))
+			let hit_from_outside = dot(ray.direction, normal) < 0.0;
+			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, hit_from_outside, false, [0.0, 0.0, 0.0]))
 		} else {
 			None
 		}

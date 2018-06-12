@@ -1,12 +1,12 @@
 use camera::Camera;
-use light::Light;
+use lightsphere::LightSphere;
 use physicsscene::PhysicsScene;
 use renderersphere::RendererSphere;
 use renderertriangle::RendererTriangle;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RendererScene {
-	pub lights: Vec<Light>,
+	pub light_spheres: Vec<LightSphere>,
 	pub renderer_spheres: Vec<RendererSphere>,
 	pub renderer_triangles: Vec<RendererTriangle>,
 	pub cameras: Vec<Camera>
@@ -14,9 +14,9 @@ pub struct RendererScene {
 
 impl RendererScene {
 	pub fn new(physics_scene: PhysicsScene) -> Self {
-		let mut lights: Vec<Light> = Vec::new();
-		for light in physics_scene.lights {
-			lights.push(light);
+		let mut light_spheres: Vec<LightSphere> = Vec::new();
+		for light_sphere in physics_scene.light_spheres {
+			light_spheres.push(light_sphere);
 		}
 		let mut renderer_spheres: Vec<RendererSphere> = Vec::new();
 		for physics_sphere in physics_scene.physics_spheres {
@@ -31,7 +31,7 @@ impl RendererScene {
 			cameras.push(camera);
 		}
 		Self {
-			lights,
+			light_spheres,
 			renderer_spheres,
 			renderer_triangles,
 			cameras,

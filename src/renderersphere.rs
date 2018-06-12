@@ -27,14 +27,14 @@ impl RendererShape for RendererSphere {
 	fn distance(&self, ray: &Ray) -> f64 {
 		let b = sub(ray.position, self.position);
 		let a = dot(b, ray.direction)*dot(b, ray.direction) - dot(b, b) + self.radius*self.radius;
-		if a < 1.0e-9 {
+		if a < 1.0e-6 {
 			return f64::MAX;
 		}
 		let d1 = -1.0*dot(sub(ray.position, self.position), ray.direction) + a.sqrt();
 		let d2 = -1.0*dot(sub(ray.position, self.position), ray.direction) - a.sqrt();
-		if d2 > 1.0e-9 {
+		if d2 > 1.0e-6 {
 			return d2;
-		} else if d1 > 1.0e-9 {
+		} else if d1 > 1.0e-6 {
 			return d1;
 		}
 		f64::MAX

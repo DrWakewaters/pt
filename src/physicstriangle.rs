@@ -11,7 +11,7 @@ pub struct PhysicsTriangle {
 	pub e2: [f64; 3],
 	pub normal: [f64; 3],
 	pub material: Material,
-	pub physics: Physics,
+	physics: Physics,
 }
 
 impl PhysicsTriangle {

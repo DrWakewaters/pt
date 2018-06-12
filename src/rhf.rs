@@ -1,31 +1,30 @@
-use std::f32::MAX;
+use std::f64::MAX;
 
 use math::{add, add_f32, mul};
+use rendereroutput::RendererOutput;
+
 use NUMBER_OF_BINS;
 
 pub struct RHF {
-	pub width: i32,
-	pub height: i32,
-	pub max_distance: f32,
-	pub patch_radius: i32,
-	pub search_window_radius: i32,
-	pub number_of_scales: i32,
-	pub vertical_start: i32,
-	pub vertical_end: i32,
-	pub number_of_rays: Vec<u32>,
-	pub bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>,
-	pub colors: Vec<[f64; 3]>,
-	pub colors_denoised: Vec<[f64; 3]>,
-	pub counter: Vec<f64>,
+	width: i32,
+	height: i32,
+	max_distance: f64,
+	patch_radius: i32,
+	search_window_radius: i32,
+	number_of_rays: Vec<f64>,
+	bins: Vec<Vec<[f32; 3]>>,
+	colors: Vec<[f64; 3]>,
+	colors_denoised: Vec<[f64; 3]>,
+	number_of_rays_denoised: Vec<f64>,
 }
 
 impl RHF {
-	pub fn new(width: i32, height: i32, max_distance: f32, patch_radius: i32, search_window_radius: i32, number_of_scales: i32, vertical_start: i32, vertical_end: i32, number_of_rays: Vec<u32>, colors: Vec<[f64; 3]>, bins: Vec<[[f32; 3]; NUMBER_OF_BINS]>) -> Self {
+	pub fn new(width: i32, height: i32, max_distance: f64, patch_radius: i32, search_window_radius: i32, renderer_output: &mut RendererOutput) -> Self {
 		let mut colors_denoised: Vec<[f64; 3]> = Vec::new();
-		let mut counter: Vec<f64> = Vec::new();
+		let mut number_of_rays_denoised: Vec<f64> = Vec::new();
 		for _ in 0..width*height {
 			colors_denoised.push([0.0, 0.0, 0.0]);
-			counter.push(0.0);
+			number_of_rays_denoised.push(0.0);
 		}
 		Self {
 			width,
@@ -33,19 +32,16 @@ impl RHF {
 			max_distance,
 			patch_radius,
 			search_window_radius,
-			number_of_scales,
-			vertical_start,
-			vertical_end,
-			bins,
-			number_of_rays,
-			colors,
+			bins: renderer_output.bins.to_vec(),
+			number_of_rays: renderer_output.number_of_rays.to_vec(),
+			colors: renderer_output.colors.to_vec(),
 			colors_denoised,
-			counter,
+			number_of_rays_denoised,
 		}
 	}
 
-	pub fn rhf(&mut self) -> Vec<[f64; 3]> {
-		for y_0 in self.vertical_start..self.vertical_end {
+	pub fn rhf(&mut self) -> (Vec<[f64; 3]>, Vec<f64>) {
+		for y_0 in 0..self.height {
 			for x_0 in 0..self.width {
 				for y_1 in y_0-self.search_window_radius..y_0+self.search_window_radius+1 {
 					for x_1 in x_0-self.search_window_radius..x_0+self.search_window_radius+1 {
@@ -54,28 +50,19 @@ impl RHF {
 						// TODO: distance will unfortunately be lower nere the edges when we have patches. This should be taken care of.
 						if distance < self.max_distance {
 							for pixel_index in pixel_indices {
-								self.colors_denoised[pixel_index.0 as usize] = add(self.colors_denoised[pixel_index.0 as usize], self.colors[pixel_index.1 as usize]);
-								self.counter[pixel_index.0 as usize] += 1.0;
+								let weight = 1.0/(99.0*(distance/(self.max_distance as f64)).sqrt().sqrt() + 1.0);
+								self.colors_denoised[pixel_index.0 as usize] = add(self.colors_denoised[pixel_index.0 as usize], mul(weight, self.colors[pixel_index.1 as usize]));
+								self.number_of_rays_denoised[pixel_index.0 as usize] += weight*self.number_of_rays[pixel_index.1 as usize];
 							}
 						}
 					}
 				}
 			}
 		}
-		let first_index = (self.vertical_start*self.width) as usize;
-		let last_index = (self.vertical_end*self.width) as usize;
-		let mut color_result: Vec<[f64; 3]> = Vec::new();
-		for i in first_index..last_index {
-			if self.counter[i].abs() < 1e-6 {
-				color_result.push(self.colors[i]);
-			} else {
-				color_result.push(mul(1.0/self.counter[i], self.colors_denoised[i]));
-			}
-		}
-		color_result
+		(self.colors_denoised.to_vec(), self.number_of_rays_denoised.to_vec())
 	}
-	pub fn kolmogorov_smirnov_distance(&self, pixel_indices: &[(i32, i32)]) -> f32 {
-		let mut max_distances: Vec<f32> = Vec::new();
+	fn kolmogorov_smirnov_distance(&self, pixel_indices: &[(i32, i32)]) -> f64 {
+		let mut max_distances: Vec<f64> = Vec::new();
 		for pixel_index in pixel_indices {
 			let mut cummulative_0 = [0.0, 0.0, 0.0];
 			let mut cummulative_1 = [0.0, 0.0, 0.0];
@@ -88,17 +75,17 @@ impl RHF {
 				println!("bins[{}] = {:?}", i, bins_0[i as usize]);
 			}
 			println!("");
-			*/
+*/
 			let number_of_rays_0 = self.number_of_rays[pixel_index.0 as usize];
 			let number_of_rays_1 = self.number_of_rays[pixel_index.1 as usize];
-			if number_of_rays_0 == 0 || number_of_rays_1 == 0 {
+			if number_of_rays_0 < 1.0e-6 || number_of_rays_1 < 1.0e-6 {
 				max_distances.push(MAX);
 				continue;
 			}
 			for i in 0..NUMBER_OF_BINS {
 				cummulative_0 = add_f32(cummulative_0, bins_0[i]);
 				cummulative_1 = add_f32(cummulative_1, bins_1[i]);
-				let distance = (cummulative_1[0]-cummulative_0[0]).abs()+(cummulative_1[1]-cummulative_0[1]).abs()+(cummulative_1[2]-cummulative_0[2]).abs();
+				let distance = f64::from((cummulative_1[0]-cummulative_0[0]).abs()+(cummulative_1[1]-cummulative_0[1]).abs()+(cummulative_1[2]-cummulative_0[2]).abs());
 				if distance > max_distance {
 					max_distance = distance;
 				}
@@ -112,7 +99,7 @@ impl RHF {
 		max_distance_total
 	}
 
-	pub fn compute_pixel_indices(&self, y_0_middle: i32, x_0_middle: i32, y_1_middle: i32, x_1_middle: i32) -> Vec<(i32, i32)> {
+	fn compute_pixel_indices(&self, y_0_middle: i32, x_0_middle: i32, y_1_middle: i32, x_1_middle: i32) -> Vec<(i32, i32)> {
 		let mut pixel_indices: Vec<(i32, i32)> = Vec::new();
 		for vertical_shift in -self.patch_radius..self.patch_radius+1 {
 			for horizontal_shift in -self.patch_radius..self.patch_radius+1 {

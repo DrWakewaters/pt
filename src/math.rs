@@ -19,6 +19,12 @@ pub fn add_f32(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
 
 #[inline(always)]
 #[allow(dead_code)]
+pub fn add_f64(left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
+	[left[0]+right[0], left[1]+right[1], left[2]+right[2]]
+}
+
+#[inline(always)]
+#[allow(dead_code)]
 pub fn add_u16(left: [u16; 3], right: [u16; 3]) -> [u16; 3] {
 	[left[0]+right[0], left[1]+right[1], left[2]+right[2]]
 }
@@ -170,6 +176,7 @@ pub fn make_basis_vectors(v1: [f64; 3]) -> ([f64; 3], [f64; 3], [f64; 3]) {
 }
 
 // See http://mathworld.wolfram.com/SpherePointPicking.html.
+#[allow(dead_code)]
 pub fn random_uniform_on_sphere(pcg: &mut Pcg32) -> [f64; 3] {
 	let r1 = pcg.next_f64();
 	let r2 = pcg.next_f64();
@@ -186,40 +193,52 @@ pub fn random_uniform_on_sphere(pcg: &mut Pcg32) -> [f64; 3] {
 // If it's not opaque, compute which micro normal is needed to get the random reflection direction.
 // For that normal and incoming direction, compute the probability of a reflection, and then either reflect or transmit the ray.
 #[allow(dead_code)]
-pub fn random_from_brdf(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, pcg: &mut Pcg32) -> ([f64; 3], bool) {
+pub fn random_from_brdf(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, refractive_index_1: f64, refractive_index_2: f64, pcg: &mut Pcg32) -> ([f64; 3], bool) {
 	let mut r = pcg.next_f64();
-	let outgoing_direction = if r < material.specular_probability {
-		random_specular_on_hemisphere(incoming_direction, normal, material, pcg)
+	let (outgoing_direction, specular_reflection) = if r < material.specular_probability {
+		(random_specular_on_hemisphere(incoming_direction, normal, material, pcg), true)
 	} else {
-		random_lambertian_on_hemisphere(normal, pcg)
+		(random_lambertian_on_hemisphere(normal, pcg), false)
 	};
 	if material.is_opaque {
 		return (outgoing_direction, true)
 	}
-	println!("WRONG");
 	let micro_normal = normalised(add(incoming_direction, outgoing_direction));
-	// @TODO Fix the refractive indices.
-	let refractive_index_1 = 1.0;
-	let refractive_index_2 = 1.0;
-	let refractive_indices_ratio = refractive_index_2/refractive_index_1;
 	let ratio_reflected = compute_f(incoming_direction, micro_normal, refractive_index_1, refractive_index_2);
 	r = pcg.next_f64();
 	if r < ratio_reflected {
 		(outgoing_direction, true)
+	// @TODO: Should it be micro_normal instead of n somewhere in this code?
 	} else {
-		// @TODO Fix the refractive indices.
-		let cos_theta = dot(micro_normal, incoming_direction);
-		let radicand = 1.0-refractive_indices_ratio*refractive_indices_ratio*(1.0-cos_theta*cos_theta);
+		// See https://en.wikipedia.org/wiki/Snell%27s_law.
+		let r = refractive_index_1/refractive_index_2;
+		let n = if dot(incoming_direction, micro_normal) > 0.0 {
+			micro_normal
+		} else {
+			println!("The micro normal is incorrect.");
+			mul(-1.0, micro_normal)
+		};
+		if material.maximum_specular_angle == 0.0 && norm(sub(n, normal)) > 1.0e-6 && specular_reflection {
+			println!("The mirror reflection is not working.");
+		}
+		let l = mul(-1.0, incoming_direction);
+		let c = -1.0*dot(n, l);
+		let radicand = 1.0-r*r*(1.0-c*c);
 		if radicand < 0.0 {
 			println!("Negative radicand. Should not happen. The radicand is {}.", radicand);
 		}
-		(add(mul(-1.0*refractive_indices_ratio, incoming_direction), mul(refractive_indices_ratio*cos_theta-radicand.sqrt(), micro_normal)), false)
+		//let diff = norm(sub(normalised(add(mul(r, l), mul(r*c-radicand.sqrt(), n))), l));
+		//println!("{}", diff);
+		(normalised(add(mul(r, l), mul(r*c-radicand.sqrt(), n))), false)
 	}
 }
 
 #[allow(dead_code)]
 pub fn random_specular_on_hemisphere(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, pcg: &mut Pcg32) -> [f64; 3] {
 	let specular_direction = sub(mul(2.0*dot(incoming_direction, normal), normal), incoming_direction);
+	if material.maximum_specular_angle == 0.0 {
+		return normalised(specular_direction);
+	}
 	// Find phi: the angle we will rotate wo away from specular_direction, and theta: the angle we will then rotate wo around specular_direction.
 	let mut rx = pcg.next_f64();
 	let ry = pcg.next_f64();
@@ -262,14 +281,51 @@ pub fn random_lambertian_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f6
 // A Ray hits a RendererShape.
 // Compute the brdf both for a diffuse interaction and for a specular interaction and compute the weighted average.
 // @TODO Support transmission.
-pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
-	let brdf_specular = brdf_specular(incoming_direction, outgoing_direction, normal, material);
-	let brdf_lambertian = brdf_lambertian(incoming_direction, outgoing_direction, normal, material);
-	material.specular_probability*brdf_specular + (1.0-material.specular_probability)*brdf_lambertian
+pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], refractive_index_1: f64, refractive_index_2: f64, material: Material) -> f64 {
+	let brdf_reflection_specular = brdf_specular(incoming_direction, outgoing_direction, normal, material);
+	let brdf_reflection_lambertian = brdf_lambertian(outgoing_direction, normal);
+	let brdf_reflection = material.specular_probability*brdf_reflection_specular + (1.0-material.specular_probability)*brdf_reflection_lambertian;
+	if material.is_opaque {
+		brdf_reflection
+	} else {
+		let must_reflect_to_hit_light = dot(outgoing_direction, normal) > 0.0;
+		let ratio_reflected = compute_f(incoming_direction, normal, refractive_index_1, refractive_index_2);
+		if must_reflect_to_hit_light {
+			//println!("reflect, {}", ratio_reflected*brdf_reflection);
+			ratio_reflected*brdf_reflection
+		} else {
+			// See https://en.wikipedia.org/wiki/Snell%27s_law.
+			let r = refractive_index_1/refractive_index_2;
+			let l = mul(-1.0, incoming_direction);
+			let c = -1.0*dot(normal, l);
+			let mut radicand = 1.0-r*r*(1.0-c*c);
+			if radicand < 0.0 {
+				//println!("Negative radicand. Should not happen. The radicand is {}.", radicand);
+				radicand = 0.0;
+			}
+			let transmitted_direction = normalised(add(mul(r, l), mul(r*c-radicand.sqrt(), normal)));
+			let brdf_transmission_specular = brdf_specular_transmission(transmitted_direction, outgoing_direction, mul(-1.0, normal), material);
+			//let brdf_transmission_lambertian = brdf_lambertian(transmitted_direction, mul(-1.0, normal));
+			let brdf_transmission_lambertian = 0.0;
+			let brd_transmission = material.specular_probability*brdf_transmission_specular + (1.0-material.specular_probability)*brdf_transmission_lambertian;
+			//println!("transmit, {}", (1.0-ratio_reflected)*brd_transmission);
+			(1.0-ratio_reflected)*brd_transmission
+		}
+	}
+}
+
+fn brdf_specular_transmission(specular_transmitted_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
+	let phi = dot(outgoing_direction, specular_transmitted_direction).acos();
+	let maximum_angle = min(PI/2.0 - dot(normal, specular_transmitted_direction), material.maximum_specular_angle);
+	if phi < maximum_angle {
+		let a = 1.0/(2.0*PI*(maximum_angle-maximum_angle.sin()));
+		2.0*PI*a*(maximum_angle-phi)
+	} else {
+		0.0
+	}
 }
 
 fn brdf_specular(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
-	let halfway_vector = normalised(add(incoming_direction, outgoing_direction));
 	let specular_direction = sub(mul(2.0*dot(incoming_direction, normal), normal), incoming_direction);
 	let phi = dot(outgoing_direction, specular_direction).acos();
 	let maximum_angle = min(PI/2.0 - dot(normal, specular_direction), material.maximum_specular_angle);
@@ -281,10 +337,11 @@ fn brdf_specular(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], nor
 	}
 }
 
-fn brdf_lambertian(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], material: Material) -> f64 {
+fn brdf_lambertian(outgoing_direction: [f64; 3], normal: [f64; 3]) -> f64 {
 	2.0*dot(outgoing_direction, normal)
 }
 
+// See https://en.wikipedia.org/wiki/Fresnel_equations.
 #[allow(dead_code)]
 pub fn compute_f(wi: [f64; 3], n: [f64; 3], eta_1: f64, eta_2: f64) -> f64 {
 	let cos_theta_i = dot(wi, n);
@@ -293,7 +350,7 @@ pub fn compute_f(wi: [f64; 3], n: [f64; 3], eta_1: f64, eta_2: f64) -> f64 {
 
 	// Total internal reflection.
 	if sin_theta_i_square.sqrt() >= eta_2/eta_1 {
-//		println!("Total internal reflection. eta_1 = {}, eta_2 = {}", eta_1, eta_2);
+//		println!("Total internal reflection. eta_1 = {}, eta_2 = {}, wi = {:?}, n = {:?}", eta_1, eta_2, wi, n);
 		return 1.0;
 	}
 
@@ -320,6 +377,25 @@ pub fn min(left: f64, right: f64) -> f64 {
 	} else {
 		right
 	}
+}
+
+#[allow(dead_code)]
+pub fn intensity_to_color(color: [f64; 3]) -> [f64; 3] {
+	let gamma = 1.0e7;
+	let mut max_intensity = color[0];
+	if color[1] > max_intensity {
+		max_intensity = color[1];
+	}
+	if color[2] > max_intensity {
+		max_intensity = color[2];
+	}
+	let factor = if max_intensity > 1.0e-12 {
+		let modified_max_intensity = (gamma*max_intensity).atan()*255.0/(PI/2.0);
+		modified_max_intensity/max_intensity
+	} else {
+		1.0
+	};
+	mul(factor, color)
 }
 
 /*
