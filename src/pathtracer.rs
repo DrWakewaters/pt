@@ -8,7 +8,7 @@ use pngfile::{make_file, read_frame, read_scene, write_frame, write_scene};
 use renderer::Renderer;
 use rendererscene::RendererScene;
 use rendereroutput::RendererOutput;
-use rendereroutputrow::RendererOutputRow;
+use rendereroutputpixel::RendererOutputPixel;
 use rhf::RHF;
 
 pub struct Pathtracer {
@@ -130,42 +130,38 @@ impl Pathtracer {
 	fn render(&mut self, renderer_scene: &mut RendererScene) -> RendererOutput {
 		let tm = now();
 		println!("Render starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);
-		let rows_rendered = Arc::new(Mutex::new(vec![false; self.height as usize]));
+		let pixels_rendered = Arc::new(Mutex::new(vec![vec![false; self.width as usize]; self.height as usize]));
 		let mut threads: Vec<JoinHandle<_>> = Vec::new();
 		for _ in 0..self.number_of_threads {
 			let renderer_scene_clone = renderer_scene.clone();
-			let (width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, rows_rendered_clone) = (self.width, self.height, self.spp_per_iteration, self.maximum_spp, self.maximum_error, self.maximum_brdf_value, self.perform_post_process, rows_rendered.clone());
+			let (width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, pixels_rendered_clone) = (self.width, self.height, self.spp_per_iteration, self.maximum_spp, self.maximum_error, self.maximum_brdf_value, self.perform_post_process, pixels_rendered.clone());
 			threads.push(spawn(move || {
-				let mut renderer = Renderer::new(width, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, renderer_scene_clone);
+				let mut renderer = Renderer::new(width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, renderer_scene_clone);
 				for y in 0..height {
-					let mut row_rendered = {
-						// @TODO: Get rid of unwrap().
-						let mut rows_rendered = rows_rendered_clone.lock().unwrap();
-						let row_rendered = rows_rendered[y as usize];
-						rows_rendered[y as usize] = true;
-						row_rendered
-					};
-					if !row_rendered {
-						renderer.render(y);
+					for x in 0..width {
+						let mut pixel_rendered = {
+							// @TODO: Get rid of unwrap().
+							let mut pixels_rendered = pixels_rendered_clone.lock().unwrap();
+							let pixel_rendered = pixels_rendered[y as usize][x as usize];
+							pixels_rendered[y as usize][x as usize] = true;
+							pixel_rendered
+						};
+						if !pixel_rendered {
+							renderer.render(y, x);
+						}
 					}
 				}
-				renderer.get_renderer_output_rows()
+				renderer.get_renderer_output_pixels()
 			}));
 		}
-		let mut renderer_output_rows: Vec<RendererOutputRow> = Vec::new();
-		for i in 0..self.height {
-			renderer_output_rows.push(RendererOutputRow::new(i, self.width));
-		}
+		let mut renderer_output_pixels: Vec<RendererOutputPixel> = Vec::new();
 		for (i, thread) in threads.into_iter().enumerate() {
 			println!("Waiting for thread {} to finish...", i);
 			let result = thread.join();
 			println!("Thread {} finished.", i);
 			match result {
-				Ok(mut renderer_output_rows_thread) => {
-					for renderer_output_row in renderer_output_rows_thread {
-						let row_number = renderer_output_row.row_number as usize;
-						renderer_output_rows[row_number] = renderer_output_row;
-					}
+				Ok(mut renderer_output_pixels_thread) => {
+					renderer_output_pixels.append(&mut renderer_output_pixels_thread);
 				}
 				Err(e) => {
 					println!("{:?}", e);
@@ -174,7 +170,7 @@ impl Pathtracer {
 		}
 		let duration = now() - tm;
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
-		RendererOutput::new(self.width, self.height, renderer_output_rows)
+		RendererOutput::new(self.width, self.height, renderer_output_pixels)
 	}
 
 	fn write_to_image(&self, renderer_output: &mut RendererOutput, prefix: usize) {

@@ -78,11 +78,11 @@ impl PhysicsScene {
 		*/
 
 		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], 0.0, 1.0, 0.0, true);
-		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.5, 0.03, 0.0, true);
-		//let white_specular_opaque = Material::new([0.8, 0.8, 0.8], 1.0, 0.03, 0.0, true);
+		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.1, 0.05, 0.0, true);
+		let white_specular_opaque = Material::new([0.8, 0.8, 0.8], 1.0, 0.05, 0.0, true);
 
-		//let white_diffuse_transparent = Material::new([1.0, 1.0, 1.0], 0.0, 1.0, 2.0, false);
-		//let white_specular_transparent = Material::new([1.0, 1.0, 1.0], 1.0, 0.1, 2.0, false);
+		let white_diffuse_transparent = Material::new([1.0, 1.0, 1.0], 0.0, 1.0, 2.0, false);
+		let white_specular_transparent = Material::new([1.0, 1.0, 1.0], 1.0, 0.05, 2.0, false);
 
 		let green_diffuse_opaque = Material::new([0.15, 0.65, 0.15], 0.0, 1.0, 0.0, true);
 		let red_diffuse_opaque = Material::new([0.65, 0.15, 0.15], 0.0, 1.0, 0.0, true);
@@ -93,19 +93,19 @@ impl PhysicsScene {
 		let local_z = [0.0, 0.0, 1.0];
 
 		let large_radius = 160.0;
-		//let middle_radius = 75.0;
+		let middle_radius = 75.0;
 		let small_radius = 70.0;
 		let mass = 1000.0;
 
 		let inertia_diagonal_large_radius = 2.0/5.0*mass*large_radius*large_radius;
 		let inertia_large_radius = [[inertia_diagonal_large_radius, 0.0, 0.0], [0.0, inertia_diagonal_large_radius, 0.0], [0.0, 0.0, inertia_diagonal_large_radius]];
-		//let inertia_diagonal_middle_radius = 2.0/5.0*mass*middle_radius*middle_radius;
-		//let inertia_middle_radius = [[inertia_diagonal_middle_radius, 0.0, 0.0], [0.0, inertia_diagonal_middle_radius, 0.0], [0.0, 0.0, inertia_diagonal_middle_radius]];
+		let inertia_diagonal_middle_radius = 2.0/5.0*mass*middle_radius*middle_radius;
+		let inertia_middle_radius = [[inertia_diagonal_middle_radius, 0.0, 0.0], [0.0, inertia_diagonal_middle_radius, 0.0], [0.0, 0.0, inertia_diagonal_middle_radius]];
 		let inertia_diagonal_small_radius = 2.0/5.0*mass*small_radius*small_radius;
 		let inertia_small_radius = [[inertia_diagonal_small_radius, 0.0, 0.0], [0.0, inertia_diagonal_small_radius, 0.0], [0.0, 0.0, inertia_diagonal_small_radius]];
 
 		let physics_large_radius = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], inertia_large_radius, mass, true);
-		//let physics_middle_radius = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], inertia_middle_radius, mass, true);
+		let physics_middle_radius = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], inertia_middle_radius, mass, true);
 		let physics_small_radius = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], inertia_small_radius, mass, true);
 
 		let physics_triangle = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], 0.0, false);
@@ -113,20 +113,18 @@ impl PhysicsScene {
 		let mut physics_spheres: Vec<PhysicsSphere> = Vec::new();
 
 		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
+		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_semi_specular_opaque, physics_large_radius));
+		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_specular_opaque, physics_large_radius));
 
 		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-small_radius, 370.0], small_radius, red_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_diffuse_opaque, physics_small_radius));
+		physics_spheres.push(PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_diffuse_transparent, physics_small_radius));
 		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-small_radius, 370.0], small_radius, blue_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_diffuse_opaque, physics_small_radius));
+		physics_spheres.push(PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_specular_transparent, physics_small_radius));
 		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-small_radius, 370.0], small_radius, green_diffuse_opaque, physics_small_radius));
 
-		/*
 		physics_spheres.push(PhysicsSphere::new([-200.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
 		physics_spheres.push(PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
 		physics_spheres.push(PhysicsSphere::new([1200.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
-		*/
 
 		/*
 		let specular_probabilities = vec![0.0, 0.01, 0.1, 0.3, 1.0];
@@ -152,8 +150,8 @@ impl PhysicsScene {
 			PhysicsTriangle::new(&nodes_2, [11, 9, 8], white_diffuse_opaque, physics_triangle),
 			PhysicsTriangle::new(&nodes_2, [11, 10, 9], white_diffuse_opaque, physics_triangle),
 			// Floor.
-			PhysicsTriangle::new(&nodes_2, [15, 13, 12], white_semi_specular_opaque, physics_triangle),
-			PhysicsTriangle::new(&nodes_2, [15, 14, 13], white_semi_specular_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes_2, [15, 13, 12], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes_2, [15, 14, 13], white_diffuse_opaque, physics_triangle),
 			// Left wall.
             //PhysicsTriangle::new(&nodes, [0, 4, 5], green_diffuse_opaque, physics_triangle),
             //PhysicsTriangle::new(&nodes, [0, 5, 1], green_diffuse_opaque, physics_triangle),
@@ -175,7 +173,7 @@ impl PhysicsScene {
         ];
 		let light_spheres = vec![
 			//LightSphere::new([-1000.0, -500.0, 300.0], [1.0, 1.0, 1.0], 0.0),
-			LightSphere::new([-1500.0, -300.0, 200.0], [1.0, 1.0, 1.0], 300.0),
+			LightSphere::new([-1200.0, -500.0, 300.0], [1.0, 1.0, 1.0], 300.0),
 		];
 		let cameras = vec! [
 			Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], 1400.0, 18.0),

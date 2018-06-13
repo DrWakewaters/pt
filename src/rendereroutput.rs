@@ -1,4 +1,4 @@
-use rendereroutputrow::RendererOutputRow;
+use rendereroutputpixel::RendererOutputPixel;
 
 use NUMBER_OF_BINS;
 
@@ -11,11 +11,26 @@ pub struct RendererOutput {
 	pub number_of_rays: Vec<f64>,
 }
 
+// @TODO: Check if I've mixed up width/height and y/x.
 impl RendererOutput {
-	pub fn new(width: u32, height: u32, mut renderer_output_rows: Vec<RendererOutputRow>) -> Self {
-		let mut bins: Vec<Vec<[f32; 3]>> = Vec::new();
-		let mut colors: Vec<[f64; 3]> = Vec::new();
-		let mut number_of_rays: Vec<f64> = Vec::new();
+	pub fn new(width: u32, height: u32, renderer_output_pixels: Vec<RendererOutputPixel>) -> Self {
+		let mut bins: Vec<Vec<[f32; 3]>> = vec![vec![[0.0, 0.0, 0.0]; NUMBER_OF_BINS]; (width*height) as usize];
+		let mut colors: Vec<[f64; 3]> = vec![[0.0, 0.0, 0.0]; (width*height) as usize];
+		let mut number_of_rays: Vec<f64> = vec![0.0; (width*height) as usize];
+		for renderer_output_pixel in renderer_output_pixels {
+			let (y, x) = (renderer_output_pixel.y, renderer_output_pixel.x);
+			colors[(y*width+x) as usize] = renderer_output_pixel.color;
+			number_of_rays[(y*width+x) as usize] = renderer_output_pixel.number_of_rays;
+			let mut bin = vec![[0.0; 3]; NUMBER_OF_BINS];
+			for (k, color) in bin.iter_mut().enumerate() {
+				for (l, color_component) in color.iter_mut().enumerate() {
+					*color_component = (1.0/f64::from(renderer_output_pixel.number_of_bin_elements)*f64::from(renderer_output_pixel.pixel.bins[k as usize][l])) as f32;
+				}
+			}
+			bins[(y*width+x) as usize] = bin;
+		}
+
+		/*
 		for i in 0..height {
 			for j in 0..width {
 				colors.push(renderer_output_rows[i as usize].colors[j as usize]);
@@ -35,6 +50,7 @@ impl RendererOutput {
 		for i in 0..height {
 			number_of_rays.append(&mut renderer_output_rows[i as usize].number_of_rays);
 		}
+		*/
 		Self {
 			width,
 			height,

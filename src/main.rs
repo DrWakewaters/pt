@@ -25,7 +25,7 @@ mod pngfile;
 mod ray;
 mod renderer;
 mod rendereroutput;
-mod rendereroutputrow;
+mod rendereroutputpixel;
 mod rendererscene;
 mod renderershape;
 mod renderersphere;
@@ -37,7 +37,7 @@ use pathtracer::Pathtracer;
 const NUMBER_OF_BINS: usize = 1;
 
 fn main() {
-	let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 1_000, 1_000_000, 15.0, 1.0, false);
+	let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 1_000, 100_000, 40.0, 100.0, false);
 	let only_post_process = false;
 	if only_post_process {
 		pathtracer.only_post_process();

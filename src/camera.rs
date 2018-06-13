@@ -28,12 +28,12 @@ impl Camera {
 		}
 	}
 
-	pub fn create_ray(&self, x: u32, y: u32, width: u32, pcg: &mut Pcg32) -> Ray {
+	pub fn create_ray(&self, x: u32, y: u32, width: u32, height: u32, pcg: &mut Pcg32) -> Ray {
 		let r = pcg.next_f64()*0.5;
 		let theta = pcg.next_f64()*2.0*PI;
 		let dx = theta.cos()*r;
 		let dy = theta.sin()*r;
-		let point_on_retina = add(self.retina_center, [f64::from(width)/2.0 - f64::from(x) + dx, f64::from(width)/2.0 - f64::from(y) + dy, 0.0]);
+		let point_on_retina = add(self.retina_center, [f64::from(width)/2.0 - f64::from(x) + dx, f64::from(height)/2.0 - f64::from(y) + dy, 0.0]);
 		let mut direction = normalised(sub(self.pinhole, point_on_retina));
 		let distance_to_focal_plane = dot(sub(self.point_on_focal_plane, self.pinhole), self.retina_normal)/dot(direction, self.retina_normal);
 		let point_on_focal_plane = add(self.pinhole, mul(distance_to_focal_plane, direction));

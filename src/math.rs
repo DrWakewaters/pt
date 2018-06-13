@@ -381,7 +381,7 @@ pub fn min(left: f64, right: f64) -> f64 {
 
 #[allow(dead_code)]
 pub fn intensity_to_color(color: [f64; 3]) -> [f64; 3] {
-	let gamma = 1.0e7;
+	let gamma = 2.0e7;
 	let mut max_intensity = color[0];
 	if color[1] > max_intensity {
 		max_intensity = color[1];
