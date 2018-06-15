@@ -3,6 +3,8 @@ use std::f64::consts::PI;
 use pcg_rand::Pcg32;
 use rand::Rng;
 
+use GAMMA;
+
 use material::Material;
 
 #[inline(always)]
@@ -278,9 +280,7 @@ pub fn random_lambertian_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f6
 	normalised(add(add(mul(sintheta*phi.cos(), t1), mul(sintheta*phi.sin(), t2)), mul(costheta, t3)))
 }
 
-// A Ray hits a RendererShape.
 // Compute the brdf both for a diffuse interaction and for a specular interaction and compute the weighted average.
-// @TODO Support transmission.
 pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: [f64; 3], refractive_index_1: f64, refractive_index_2: f64, material: Material) -> f64 {
 	let brdf_reflection_specular = brdf_specular(incoming_direction, outgoing_direction, normal, material);
 	let brdf_reflection_lambertian = brdf_lambertian(outgoing_direction, normal);
@@ -307,9 +307,9 @@ pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: 
 			let brdf_transmission_specular = brdf_specular_transmission(transmitted_direction, outgoing_direction, mul(-1.0, normal), material);
 			//let brdf_transmission_lambertian = brdf_lambertian(transmitted_direction, mul(-1.0, normal));
 			let brdf_transmission_lambertian = 0.0;
-			let brd_transmission = material.specular_probability*brdf_transmission_specular + (1.0-material.specular_probability)*brdf_transmission_lambertian;
+			let brdf_transmission = material.specular_probability*brdf_transmission_specular + (1.0-material.specular_probability)*brdf_transmission_lambertian;
 			//println!("transmit, {}", (1.0-ratio_reflected)*brd_transmission);
-			(1.0-ratio_reflected)*brd_transmission
+			(1.0-ratio_reflected)*brdf_transmission
 		}
 	}
 }
@@ -381,7 +381,6 @@ pub fn min(left: f64, right: f64) -> f64 {
 
 #[allow(dead_code)]
 pub fn intensity_to_color(color: [f64; 3]) -> [f64; 3] {
-	let gamma = 2.0e7;
 	let mut max_intensity = color[0];
 	if color[1] > max_intensity {
 		max_intensity = color[1];
@@ -390,7 +389,7 @@ pub fn intensity_to_color(color: [f64; 3]) -> [f64; 3] {
 		max_intensity = color[2];
 	}
 	let factor = if max_intensity > 1.0e-12 {
-		let modified_max_intensity = (gamma*max_intensity).atan()*255.0/(PI/2.0);
+		let modified_max_intensity = (GAMMA*max_intensity).atan()*255.0/(PI/2.0);
 		modified_max_intensity/max_intensity
 	} else {
 		1.0

@@ -48,7 +48,7 @@ impl Renderer {
 
 	pub fn render(&mut self, y: u32, x: u32) {
 		if x == 0 {
-			println!("rendering, y={}", y);
+			println!("Rendering row {} of {}.", y, self.height);
 		}
 		let number_of_light_spheres = self.scene.light_spheres.len();
 		let random_exclusive_max_lights: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_light_spheres as u32);
@@ -236,9 +236,11 @@ impl Renderer {
 		};
 		// @TODO: Get rid of the upper limit of the brdf.
 		let brdf = min(brdf(ingoing_direction, outgoing_direction, normal, refractive_index_1, refractive_index_2, hitpoint_in_camera_path.material), self.maximum_brdf_value);
-		//color = add(color, mul(brdf/(distance*distance*f64::from(number_of_light_connections)), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color)));
+		mul(brdf/(distance*distance), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color))
+		/*
 		let distance_from_retina = hitpoint_in_camera_path.distance_from_retina + distance;
 		mul(brdf/(distance_from_retina*distance_from_retina), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color))
+		*/
 	}
 
 	fn store(&mut self, last_pos: usize, color: [f64; 3]) {

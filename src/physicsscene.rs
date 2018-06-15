@@ -17,30 +17,17 @@ pub struct PhysicsScene {
 
 impl PhysicsScene {
 	pub fn new() -> Self {
-		/*
+		// This scene is modelled after https://en.wikipedia.org/wiki/Path_tracing#/media/File:Path_tracing_001.png.
+		// The scene is difficult, due to having a somewhat small, distant lightsource and specular, transparent spheres. Since the path tracer is doing direct light sampling at every intersection (in fact, this is the only way we get any light - the lightsource is not considered a part of the scene in the ray-object intersection algorithm) we get okay convergence for diffuse materials, but specular, transparent ones gives huge variance and slow convergence.
 		let nodes = vec![
-        	// Top
-			[0.0, 0.0, 0.0],           // 0
-			[0.0, 0.0, 1000.0],        // 1
-			[1000.0, 0.0, 1000.0],     // 2
-			[1000.0, 0.0, 0.0],        // 3
-			// Bottom
-			[0.0, 1000.0, 0.0],        // 4
-			[0.0, 1000.0, 1000.0],     // 5
-			[1000.0, 1000.0, 1000.0],  // 6
-			[1000.0, 1000.0, 0.0],     // 7
-		];
-		*/
-
-		let nodes_2 = vec![
 			// Left wall
 			[-600.0, 1000.0, -1500.0],		// 0
 			[-600.0, 500.0, -1500.0],		// 1
-			[-600.0, 500.0, 500.0],		// 2
+			[-600.0, 500.0, 500.0],			// 2
 			[-600.0, 1000.0, 500.0],		// 3
 			// Right wall
 			[1600.0, 1000.0, 500.0],		// 4
-			[1600.0, 500.0, 500.0],		// 5
+			[1600.0, 500.0, 500.0],			// 5
 			[1600.0, 500.0, -1500.0],		// 6
 			[1600.0, 1000.0, -1500.0],		// 7
 			// Far wall
@@ -54,28 +41,6 @@ impl PhysicsScene {
 			[1600.0, 1000.0, 1000.0],		// 14
 			[1600.0, 1000.0, -2500.0],		// 15
 		];
-
-		/*
-		[-1000.0, 1000.0, -1500.0],		// 0
-		[-1000.0, 500.0, -1500.0],		// 1
-		[-1000.0, 500.0, 500.0],		// 2
-		[-1000.0, 1000.0, 500.0],		// 3
-		// Right wall
-		[1000.0, 1000.0, 500.0],		// 4
-		[1000.0, 500.0, 500.0],			// 5
-		[1000.0, 500.0, -1500.0],		// 6
-		[1000.0, 1000.0, -1500.0],		// 7
-		// Far wall
-		[-1000.0, 1000.0, 1000.0],		// 8
-		[-1000.0, -400.0, 1000.0],		// 9
-		[1000.0, -400.0, 1000.0],		// 10
-		[1000.0, 1000.0, 1000.0],		// 11
-		// Floor
-		[-1000.0, 1000.0, -2500.0],		// 12
-		[-1000.0, 1000.0, 1000.0],		// 13
-		[1000.0, 1000.0, 1000.0],		// 14
-		[1000.0, 1000.0, -2500.0],		// 15
-		*/
 
 		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], 0.0, 1.0, 0.0, true);
 		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.1, 0.05, 0.0, true);
@@ -126,57 +91,25 @@ impl PhysicsScene {
 		physics_spheres.push(PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
 		physics_spheres.push(PhysicsSphere::new([1200.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
 
-		/*
-		let specular_probabilities = vec![0.0, 0.01, 0.1, 0.3, 1.0];
-		let maximum_specular_angles = vec![0.01, 0.05, 0.1, 0.5, 1.5];
-		for i in -2_i32..3 {
-			for j in -2_i32..3 {
-				let material = Material::new([0.8, 0.8, 0.8], specular_probabilities[i as usize+2], maximum_specular_angles[j as usize+2], 0.0, true);
-				let x = 500.0 + (i as f64)*200.0;
-				let y = 500.0 + (j as f64)*200.0;
-				physics_spheres.push(PhysicsSphere::new([x, y, 100.0], middle_radius, material, physics_middle_radius));
-			}
-		}
-		*/
-
 		let physics_triangles = vec![
 			// Left wall.
-			PhysicsTriangle::new(&nodes_2, [3, 1, 0], white_diffuse_opaque, physics_triangle),
-			PhysicsTriangle::new(&nodes_2, [3, 2, 1], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [3, 1, 0], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [3, 2, 1], white_diffuse_opaque, physics_triangle),
 			// Right wall.
-			PhysicsTriangle::new(&nodes_2, [7, 5, 4], white_diffuse_opaque, physics_triangle),
-			PhysicsTriangle::new(&nodes_2, [7, 6, 5], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [7, 5, 4], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [7, 6, 5], white_diffuse_opaque, physics_triangle),
 			// Far wall.
-			PhysicsTriangle::new(&nodes_2, [11, 9, 8], white_diffuse_opaque, physics_triangle),
-			PhysicsTriangle::new(&nodes_2, [11, 10, 9], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [11, 9, 8], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [11, 10, 9], white_diffuse_opaque, physics_triangle),
 			// Floor.
-			PhysicsTriangle::new(&nodes_2, [15, 13, 12], white_diffuse_opaque, physics_triangle),
-			PhysicsTriangle::new(&nodes_2, [15, 14, 13], white_diffuse_opaque, physics_triangle),
-			// Left wall.
-            //PhysicsTriangle::new(&nodes, [0, 4, 5], green_diffuse_opaque, physics_triangle),
-            //PhysicsTriangle::new(&nodes, [0, 5, 1], green_diffuse_opaque, physics_triangle),
-			// Far wall.
-            //PhysicsTriangle::new(&nodes, [1, 5, 6], white_diffuse_opaque, physics_triangle),
-            //PhysicsTriangle::new(&nodes, [1, 6, 2], white_diffuse_opaque, physics_triangle),
-			// Right wall.
-			//PhysicsTriangle::new(&nodes, [2, 6, 7], red_diffuse_opaque, physics_triangle),
-            //PhysicsTriangle::new(&nodes, [2, 7, 3], red_diffuse_opaque, physics_triangle),
-            // Near wall.
-			//PhysicsTriangle::new(&nodes, [3, 7, 4], grey_diffuse_opaque, physics_2),
-            //PhysicsTriangle::new(&nodes, [3, 4, 0], grey_diffuse_opaque, physics_2),
-			// Floor.
-            //PhysicsTriangle::new(&nodes, [4, 7, 6], white_specular_opaque, physics_triangle),
-            //PhysicsTriangle::new(&nodes, [4, 6, 5], white_specular_opaque, physics_triangle),
-            // Ceiling.
-            //PhysicsTriangle::new(&nodes, [0, 1, 2], white_diffuse_opaque, physics_triangle),
-            //PhysicsTriangle::new(&nodes, [0, 2, 3], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [15, 13, 12], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [15, 14, 13], white_diffuse_opaque, physics_triangle),
         ];
 		let light_spheres = vec![
-			//LightSphere::new([-1000.0, -500.0, 300.0], [1.0, 1.0, 1.0], 0.0),
 			LightSphere::new([-1200.0, -500.0, 300.0], [1.0, 1.0, 1.0], 300.0),
 		];
 		let cameras = vec! [
-			Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], 1400.0, 18.0),
+			Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], 1400.0, 10.0),
 		];
 		Self {
 			physics_spheres,

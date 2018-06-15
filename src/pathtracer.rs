@@ -1,4 +1,5 @@
 use std::io::{stdout, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread::{JoinHandle, spawn};
 use time::now;
@@ -24,10 +25,11 @@ pub struct Pathtracer {
 	maximum_error: f64,
 	maximum_brdf_value: f64,
 	perform_post_process: bool,
+	current_directory: PathBuf,
 }
 
 impl Pathtracer {
-	pub fn new(width: u32, height: u32, frame_number: u32, number_of_threads: usize, continue_old_simulation: bool, post_process_data: Vec<(f64, i32)>, search_window_radius: i32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, maximum_brdf_value: f64, perform_post_process: bool) -> Self {
+	pub fn new(width: u32, height: u32, frame_number: u32, number_of_threads: usize, continue_old_simulation: bool, post_process_data: Vec<(f64, i32)>, search_window_radius: i32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, maximum_brdf_value: f64, perform_post_process: bool, current_directory: PathBuf) -> Self {
 		Self {
 			width,
 			height,
@@ -41,11 +43,15 @@ impl Pathtracer {
 			maximum_error,
 			maximum_brdf_value,
 			perform_post_process,
+			current_directory,
 		}
 	}
 
-	pub fn only_post_process(&self) {
-		let pixeldata_filename = "/Users/christian/video/pixeldata.txt".to_string();
+	pub fn post_process_data(&mut self) {
+		let mut current_directory_clone = self.current_directory.clone();
+		current_directory_clone.push("pixeldata.txt");
+		let pixeldata_filename = current_directory_clone.to_str().unwrap();
+		//self.current_directory.pop();
 		let read_result = read_frame(&pixeldata_filename);
 		match read_result {
 			Err(e) => {
@@ -75,7 +81,9 @@ impl Pathtracer {
 			self.write_and_read_scene(&mut physics_scene, &mut renderer_scene);
 			let mut renderer_output = self.render(&mut renderer_scene);
 			self.write_to_image(&mut renderer_output, 0);
-			let pixeldata_filename = "/Users/christian/video/pixeldata.txt".to_string();
+			let mut current_directory_clone = self.current_directory.clone();
+			current_directory_clone.push("pixeldata.txt");
+			let pixeldata_filename = current_directory_clone.to_str().unwrap();
 			let write_result = write_frame(&pixeldata_filename, &renderer_output);
 			if let Err(e) = write_result {
 				println!("{:?}", e);
@@ -92,7 +100,10 @@ impl Pathtracer {
 	}
 
 	fn read_old_physics_scene(&self, physics_scene: &mut PhysicsScene) {
-		let scenedata_filename = format!("/Users/christian/video/{:04}.txt", self.frame_number);
+		let mut current_directory_clone = self.current_directory.clone();
+		let scenedata_filename_postfix = format!("{:04}.txt", self.frame_number);
+		current_directory_clone.push(scenedata_filename_postfix);
+		let scenedata_filename = current_directory_clone.to_str().unwrap();
 		let scene_result = read_scene(&scenedata_filename);
 		match scene_result {
 			Err(e) => {
@@ -108,7 +119,10 @@ impl Pathtracer {
 		let tm = now();
 		print!("Write and read scene starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);
 		let _ = stdout().flush();
-		let scenedata_filename = format!("/Users/christian/video/{:04}.txt", self.frame_number);
+		let mut current_directory_clone = self.current_directory.clone();
+		let scenedata_filename_postfix = format!("{:04}.txt", self.frame_number);
+		current_directory_clone.push(scenedata_filename_postfix);
+		let scenedata_filename = current_directory_clone.to_str().unwrap();
 		let write_result = write_scene(&scenedata_filename, &physics_scene);
 		if let Err(e) = write_result {
 			println!("{:?}", e);
@@ -177,7 +191,10 @@ impl Pathtracer {
 		let tm = now();
 		print!("Writing to starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);
 		let _ = stdout().flush();
-		let image_filename = format!("/Users/christian/video/{:01}_{:04}.png", prefix, self.frame_number);
+		let mut current_directory_clone = self.current_directory.clone();
+		let image_filename_postfix = format!("{:01}_{:04}.png", prefix, self.frame_number);
+		current_directory_clone.push(image_filename_postfix);
+		let image_filename = current_directory_clone.to_str().unwrap();
 		make_file(renderer_output, &image_filename);
 		let duration = now() - tm;
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
