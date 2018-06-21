@@ -305,8 +305,9 @@ pub fn brdf(incoming_direction: [f64; 3], outgoing_direction: [f64; 3], normal: 
 			}
 			let transmitted_direction = normalised(add(mul(r, l), mul(r*c-radicand.sqrt(), normal)));
 			let brdf_transmission_specular = brdf_specular_transmission(transmitted_direction, outgoing_direction, mul(-1.0, normal), material);
-			//let brdf_transmission_lambertian = brdf_lambertian(transmitted_direction, mul(-1.0, normal));
-			let brdf_transmission_lambertian = 0.0;
+			// @TODO: Fix the lambertian transmission.
+			let brdf_transmission_lambertian = brdf_lambertian(transmitted_direction, mul(-1.0, normal));
+			//let brdf_transmission_lambertian = 0.0;
 			let brdf_transmission = material.specular_probability*brdf_transmission_specular + (1.0-material.specular_probability)*brdf_transmission_lambertian;
 			//println!("transmit, {}", (1.0-ratio_reflected)*brd_transmission);
 			(1.0-ratio_reflected)*brdf_transmission

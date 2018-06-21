@@ -35,13 +35,13 @@ use pathtracer::Pathtracer;
 
 // Set it to 1 if we're not doing post-processing.
 const NUMBER_OF_BINS: usize = 1;
-const GAMMA: f64 = 2.0e7;
+const GAMMA: f64 = 100.0;
 
 fn main() {
 	let post_process_data = false;
 	match current_dir() {
 		Ok(directory) => {
-			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 1_000, 500_000, 30.0, 200.0, false, directory);
+			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 500, 500_000, 5000.0, 200.0, false, directory);
 			if post_process_data {
 				pathtracer.post_process_data();
 			} else {

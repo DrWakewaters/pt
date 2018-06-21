@@ -47,7 +47,7 @@ impl Renderer {
 	}
 
 	pub fn render(&mut self, y: u32, x: u32) {
-		if x == 0 {
+		if x == self.width/2 {
 			println!("Rendering row {} of {}.", y, self.height);
 		}
 		let number_of_light_spheres = self.scene.light_spheres.len();
@@ -75,13 +75,23 @@ impl Renderer {
 					colors.push(total_color);
 					continue;
 				}
-				// Connect the camera path hitpoints with points on lights.
-				for hitpoint_in_camera_path in &hitpoint_path_from_camera {
-					let color = self.connect_and_compute_color(hitpoint_in_camera_path, &mut pcg);
-					total_color = add(total_color, color);
+				let direct_light_sampling = false;
+				if direct_light_sampling {
+					// Connect the camera path hitpoints with points on lights.
+					for hitpoint_in_camera_path in &hitpoint_path_from_camera {
+						let color = self.connect_and_compute_color(hitpoint_in_camera_path, &mut pcg);
+						total_color = add(total_color, color);
+					}
+					self.store(last_pos, total_color);
+					colors.push(total_color);
+				} else {
+					for hitpoint in hitpoint_path_from_camera.iter().rev() {
+						total_color = elementwise_mul(total_color, hitpoint.material.color);
+						total_color = add(total_color, hitpoint.material.emission);
+					}
+					self.store(last_pos, total_color);
+					colors.push(total_color);
 				}
-				self.store(last_pos, total_color);
-				colors.push(total_color);
 			}
 			if colors.is_empty() {
 				break;
@@ -98,12 +108,15 @@ impl Renderer {
 			} else {
 				self.maximum_distance(&averages)
 			};
-			if iterations%100 == 0 {
+			if iterations%50 == 0 {
 				println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}).", iterations, x, y, error, self.maximum_error);
 			}
 			if error < self.maximum_error || iterations*self.spp_per_iteration >= self.maximum_spp {
 				converged = true;
 			}
+		}
+		if x == self.width/2 {
+			println!("Iterations needed at ({}, {}): {}.", x, y, iterations);
 		}
 	}
 
@@ -141,7 +154,13 @@ impl Renderer {
 			g_squared += average[1]*average[1];
 			b_squared += average[2]*average[2];
 		}
-		((r_squared + g_squared + b_squared - (r*r+g*g+b*b)/(length as f64))/(length as f64-1.0)).sqrt()
+		let variance = (r_squared + g_squared + b_squared - (r*r+g*g+b*b)/(length as f64))/(length as f64-1.0);
+		// Due to rounding erros, the computed variance could in rare cases be slightly lower than 0.0.
+		if variance < 0.0 {
+			0.0
+		} else {
+			variance.sqrt()
+		}
 	}
 
 	fn maximum_distance(&self, averages: &[[f64; 3]]) -> f64 {
@@ -173,12 +192,7 @@ impl Renderer {
 			} else {
 				*color = mul(survival_boost_factor, *color);
 			}
-			let distance_from_retina = if hitpoint_path.is_empty() {
-				0.0
-			} else {
-				hitpoint_path[hitpoint_path.len()-1].distance_from_retina
-			};
-			let hitpoint = self.closest_renderer_shape(&mut ray, distance_from_retina);
+			let hitpoint = self.closest_renderer_shape(&mut ray);
 			if let Some(mut hitpoint) = hitpoint {
 				let ingoing_direction = mul(-1.0, ray.direction);
 				let (refractive_index_1, refractive_index_2) = if hitpoint.hit_from_outside {
@@ -216,7 +230,7 @@ impl Renderer {
 		if dot(hitpoint_in_camera_path.normal, direction_normalised) > 0.0 {
 			return [0.0, 0.0, 0.0];
 		}
-		let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(light_position, direction_normalised), hitpoint_in_camera_path.distance_from_retina);
+		let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(light_position, direction_normalised));
 		if let Some(closest_hitpoint) = closest_hitpoint {
 			if distance-closest_hitpoint.distance > 1.0e-9 {
 				return [0.0, 0.0, 0.0];
@@ -237,10 +251,6 @@ impl Renderer {
 		// @TODO: Get rid of the upper limit of the brdf.
 		let brdf = min(brdf(ingoing_direction, outgoing_direction, normal, refractive_index_1, refractive_index_2, hitpoint_in_camera_path.material), self.maximum_brdf_value);
 		mul(brdf/(distance*distance), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color))
-		/*
-		let distance_from_retina = hitpoint_in_camera_path.distance_from_retina + distance;
-		mul(brdf/(distance_from_retina*distance_from_retina), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color))
-		*/
 	}
 
 	fn store(&mut self, last_pos: usize, color: [f64; 3]) {
@@ -256,7 +266,7 @@ impl Renderer {
 	}
 
 	// Find the closest hitpoint.
-	fn closest_renderer_shape(&self, ray: &mut Ray, distance_from_retina: f64) -> Option<Hitpoint>  {
+	fn closest_renderer_shape(&self, ray: &mut Ray) -> Option<Hitpoint>  {
 		let mut min_distance = f64::MAX;
 		let mut closest_renderer_shape_index: Option<usize> = None;
 		let mut closest_is_a_sphere = true;
@@ -288,7 +298,7 @@ impl Renderer {
 				self.scene.renderer_triangles[index].material()
 			};
 			let hit_from_outside = dot(ray.direction, normal) < 0.0;
-			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, hit_from_outside, false, [0.0, 0.0, 0.0], distance_from_retina+min_distance))
+			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, hit_from_outside, false, [0.0, 0.0, 0.0]))
 		} else {
 			None
 		}
