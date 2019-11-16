@@ -1,11 +1,13 @@
-use camera::Camera;
-use collisiontype::CollisionType;
-use math::{add, distance_squared, dot, mul, normalised, quarternion_inverse, quarternion_product, same_side, sub};
-use lightsphere::LightSphere;
-use material::Material;
-use physics::Physics;
-use physicssphere::PhysicsSphere;
-use physicstriangle::PhysicsTriangle;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::camera::Camera;
+use crate::collisiontype::CollisionType;
+use crate::math::{add, distance_squared, dot, mul, normalised, quarternion_inverse, quarternion_product, same_side, sub};
+use crate::lightsphere::LightSphere;
+use crate::material::Material;
+use crate::physics::Physics;
+use crate::physicssphere::PhysicsSphere;
+use crate::physicstriangle::PhysicsTriangle;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PhysicsScene {
@@ -49,22 +51,23 @@ impl PhysicsScene {
 
 		let white_diffuse_opaque_emissive = Material::new([0.8, 0.8, 0.8], [1.0, 1.0, 1.0], 0.0, 1.0, 0.0, true);
 
-		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0, true);
-		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.1, 0.05, 0.0, true);
-		let white_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 1.0, 0.05, 0.0, true);
+		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
+		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.1, 0.03, 0.0, true);
+		let white_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 1.0, 0.03, 0.0, true);
 
-		let white_diffuse_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 0.0, 1.0, 2.0, false);
-		let white_specular_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 1.0, 0.05, 2.0, false);
+		//let white_diffuse_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 0.0, 0.01, 1.4, false);
+		let white_semi_specular_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 0.1, 0.03, 1.4, false);
+		let white_specular_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 1.0, 0.03, 1.4, false);
 
-		let green_diffuse_opaque = Material::new([0.15, 0.65, 0.15], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0, true);
-		let red_diffuse_opaque = Material::new([0.65, 0.15, 0.15], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0, true);
-		let blue_diffuse_opaque = Material::new([0.15, 0.15, 0.65], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0, true);
+		let green_diffuse_opaque = Material::new([0.15, 0.65, 0.15], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
+		let red_diffuse_opaque = Material::new([0.65, 0.15, 0.15], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
+		let blue_diffuse_opaque = Material::new([0.15, 0.15, 0.65], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
 
 		let local_x = [1.0, 0.0, 0.0];
 		let local_y = [0.0, 1.0, 0.0];
 		let local_z = [0.0, 0.0, 1.0];
 
-		let light_position = [-1000.0, -1000.0, 500.0];
+		let light_position = [-1000.0, -1000.0, 5.0];
 
 		let light_radius = 500.0;
 		let large_radius = 160.0;
@@ -90,18 +93,18 @@ impl PhysicsScene {
 
 		let mut physics_spheres: Vec<PhysicsSphere> = Vec::new();
 		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
+		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_semi_specular_opaque, physics_large_radius));
+		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_specular_opaque, physics_large_radius));
 
 		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-small_radius, 370.0], small_radius, red_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_diffuse_opaque, physics_small_radius));
+		physics_spheres.push(PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_semi_specular_transparent, physics_small_radius));
 		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-small_radius, 370.0], small_radius, blue_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_diffuse_opaque, physics_small_radius));
+		physics_spheres.push(PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_specular_transparent, physics_small_radius));
 		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-small_radius, 370.0], small_radius, green_diffuse_opaque, physics_small_radius));
 
-		physics_spheres.push(PhysicsSphere::new([-200.0, 200.0, 370.0], middle_radius, white_diffuse_opaque, physics_middle_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_diffuse_opaque, physics_middle_radius));
-		physics_spheres.push(PhysicsSphere::new([1200.0, 200.0, 370.0], middle_radius, white_diffuse_opaque, physics_middle_radius));
+		physics_spheres.push(PhysicsSphere::new([-150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
+		physics_spheres.push(PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
+		physics_spheres.push(PhysicsSphere::new([1150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
 
 		physics_spheres.push(PhysicsSphere::new(light_position, light_radius, white_diffuse_opaque_emissive, physics_light_radius));
 
@@ -136,6 +139,7 @@ impl PhysicsScene {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn simulate_physics(&mut self) {
 		let time: f64 = 0.5;
 		let number_of_timesteps: u64 = 1000;
@@ -189,6 +193,7 @@ impl PhysicsScene {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn move_spheres(&mut self, time: f64) {
 		for sphere in &mut self.physics_spheres {
 			// Translation.
@@ -213,6 +218,7 @@ impl PhysicsScene {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn compute_collision_data(&mut self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		let sphere_sphere_collision_data = self.compute_sphere_sphere_collision();
 		let sphere_triangle_collision_data = self.compute_sphere_triangle_collision();
@@ -236,6 +242,7 @@ impl PhysicsScene {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn compute_sphere_triangle_collision(&self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		// Index of the sphere, index of the triangle, time until collision, point of contact, CollisionType.
 		let mut collision_data: Option<(usize, usize, f64, [f64; 3], CollisionType)> = None;
@@ -293,6 +300,7 @@ impl PhysicsScene {
 		collision_data
 	}
 
+	#[allow(dead_code)]
 	fn compute_sphere_sphere_collision(&self) -> Option<(usize, usize, f64, [f64; 3], CollisionType)> {
 		// Index of the first sphere, index of the second sphere, time until collision, point of contact, CollisionType.
 		let mut collision_data: Option<(usize, usize, f64, [f64; 3], CollisionType)> = None;
@@ -350,6 +358,7 @@ impl PhysicsScene {
 		collision_data
 	}
 
+	#[allow(dead_code)]
 	fn simulate_sphere_sphere_gravitation(&mut self, time: f64) {
 		let gravitation_constant = 0.0;
 		let mut accelerations: Vec<[f64; 3]> = Vec::new();
@@ -371,6 +380,7 @@ impl PhysicsScene {
 		}
 	}
 
+	#[allow(dead_code)]
 	fn simulate_sphere_scene_gravitation(&mut self, time: f64) {
 		let gravitational_acceleration = [1.0, 0.0, 0.0];
 		for sphere in &mut self.physics_spheres {

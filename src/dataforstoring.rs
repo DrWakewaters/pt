@@ -1,3 +1,5 @@
+use serde_derive::{Serialize, Deserialize};
+
 use rendereroutput::RendererOutput;
 
 #[derive(Serialize, Deserialize, Debug)]

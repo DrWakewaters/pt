@@ -1,10 +1,12 @@
 use std::f64;
 
-use material::Material;
-use math::{cross, dot, sub};
-use physicstriangle::PhysicsTriangle;
-use ray::Ray;
-use renderershape::RendererShape;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::material::Material;
+use crate::math::{cross, dot, sub};
+use crate::physicstriangle::PhysicsTriangle;
+use crate::ray::Ray;
+use crate::renderershape::RendererShape;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RendererTriangle {

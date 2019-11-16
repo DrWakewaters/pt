@@ -1,6 +1,8 @@
-use rendereroutputpixel::RendererOutputPixel;
+use serde_derive::{Serialize, Deserialize};
 
-use NUMBER_OF_BINS;
+use crate::rendereroutputpixel::RendererOutputPixel;
+
+use crate::NUMBER_OF_BINS;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RendererOutput {

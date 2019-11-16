@@ -1,5 +1,5 @@
-use material::Material;
-use ray::Ray;
+use crate::material::Material;
+use crate::ray::Ray;
 
 pub trait RendererShape {
     fn distance(&self, ray: &Ray) -> f64;

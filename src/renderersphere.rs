@@ -1,10 +1,12 @@
 use std::f64;
 
-use material::Material;
-use math::{dot, normalised, sub};
-use physicssphere::PhysicsSphere;
-use ray::Ray;
-use renderershape::RendererShape;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::material::Material;
+use crate::math::{dot, normalised, sub};
+use crate::physicssphere::PhysicsSphere;
+use crate::ray::Ray;
+use crate::renderershape::RendererShape;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct RendererSphere {

@@ -1,5 +1,7 @@
-use math::{intensity_to_color, mul};
-use rendereroutput::RendererOutput;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::math::{intensity_to_color, mul};
+use crate::rendereroutput::RendererOutput;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DataForDrawing {

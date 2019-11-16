@@ -1,4 +1,4 @@
-use pixel::Pixel;
+use crate::pixel::Pixel;
 
 #[derive(Clone)]
 pub struct RendererOutputPixel {

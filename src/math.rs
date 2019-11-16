@@ -3,9 +3,9 @@ use std::f64::consts::PI;
 use pcg_rand::Pcg32;
 use rand::Rng;
 
-use GAMMA;
+use crate::GAMMA;
 
-use material::Material;
+use crate::material::Material;
 
 #[inline(always)]
 #[allow(dead_code)]
@@ -180,8 +180,8 @@ pub fn make_basis_vectors(v1: [f64; 3]) -> ([f64; 3], [f64; 3], [f64; 3]) {
 // See http://mathworld.wolfram.com/SpherePointPicking.html.
 #[allow(dead_code)]
 pub fn random_uniform_on_sphere(pcg: &mut Pcg32) -> [f64; 3] {
-	let r1 = pcg.next_f64();
-	let r2 = pcg.next_f64();
+	let r1 = pcg.gen::<f64>();
+	let r2 = pcg.gen::<f64>();
     let theta = 2.0*PI*r1;
 	let u = 2.0*(r2-0.5);
     let p = (1.0-u*u).sqrt();
@@ -191,12 +191,12 @@ pub fn random_uniform_on_sphere(pcg: &mut Pcg32) -> [f64; 3] {
 // A Ray hits a RendererShape.
 // First, determine if the interaction is specular or diffuse.
 // Then, pick a random specular or lambertian reflection direction.
-// Then, if the object is opaque, the iteraction will be a reflection. Return the random reflection direction which was picked.
-// If it's not opaque, compute which micro normal is needed to get the random reflection direction.
+// Then, if the object is opaque, the interaction will be a reflection. Return the random reflection direction which was picked.
+// If it's not opaque, compute which micro normal is needed to get the randomly chosen reflection direction.
 // For that normal and incoming direction, compute the probability of a reflection, and then either reflect or transmit the ray.
 #[allow(dead_code)]
 pub fn random_from_brdf(incoming_direction: [f64; 3], normal: [f64; 3], material: Material, refractive_index_1: f64, refractive_index_2: f64, pcg: &mut Pcg32) -> ([f64; 3], bool) {
-	let mut r = pcg.next_f64();
+	let mut r = pcg.gen::<f64>();
 	let (outgoing_direction, specular_reflection) = if r < material.specular_probability {
 		(random_specular_on_hemisphere(incoming_direction, normal, material, pcg), true)
 	} else {
@@ -207,7 +207,7 @@ pub fn random_from_brdf(incoming_direction: [f64; 3], normal: [f64; 3], material
 	}
 	let micro_normal = normalised(add(incoming_direction, outgoing_direction));
 	let ratio_reflected = compute_f(incoming_direction, micro_normal, refractive_index_1, refractive_index_2);
-	r = pcg.next_f64();
+	r = pcg.gen::<f64>();
 	if r < ratio_reflected {
 		(outgoing_direction, true)
 	// @TODO: Should it be micro_normal instead of n somewhere in this code?
@@ -242,8 +242,8 @@ pub fn random_specular_on_hemisphere(incoming_direction: [f64; 3], normal: [f64;
 		return normalised(specular_direction);
 	}
 	// Find phi: the angle we will rotate wo away from specular_direction, and theta: the angle we will then rotate wo around specular_direction.
-	let mut rx = pcg.next_f64();
-	let ry = pcg.next_f64();
+	let mut rx = pcg.gen::<f64>();
+	let ry = pcg.gen::<f64>();
 	if ry > rx {
 		rx = ry;
 	}
@@ -255,7 +255,7 @@ pub fn random_specular_on_hemisphere(incoming_direction: [f64; 3], normal: [f64;
 	let sin_phi = phi.sin();
 	let reflection_direction = [specular_direction[0], cos_phi*specular_direction[1]-sin_phi*specular_direction[2], sin_phi*specular_direction[1]+cos_phi*specular_direction[2]];
 	// Then rotate wo around specular_direction. See https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another.
-	let theta = 2.0*PI*pcg.next_f64();
+	let theta = 2.0*PI*pcg.gen::<f64>();
 	let cos_theta = theta.cos();
 	let sin_theta = theta.sin();
 	let reflection_parallell_specular = mul(cos_phi, specular_direction);
@@ -270,8 +270,8 @@ pub fn random_specular_on_hemisphere(incoming_direction: [f64; 3], normal: [f64;
 }
 
 pub fn random_lambertian_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
-	let r1 = pcg.next_f64();
-	let r2 = pcg.next_f64();
+	let r1 = pcg.gen::<f64>();
+	let r2 = pcg.gen::<f64>();
 	let sintheta = (1.0-r1).sqrt();
 	let costheta = r1.sqrt();
 	let phi = 2.0*PI*r2;
@@ -351,7 +351,6 @@ pub fn compute_f(wi: [f64; 3], n: [f64; 3], eta_1: f64, eta_2: f64) -> f64 {
 
 	// Total internal reflection.
 	if sin_theta_i_square.sqrt() >= eta_2/eta_1 {
-//		println!("Total internal reflection. eta_1 = {}, eta_2 = {}, wi = {:?}, n = {:?}", eta_1, eta_2, wi, n);
 		return 1.0;
 	}
 
@@ -401,8 +400,8 @@ pub fn intensity_to_color(color: [f64; 3]) -> [f64; 3] {
 /*
 
 pub fn random_uniform_on_hemisphere(normal: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
-	let r1 = pcg.next_f64();
-	let r2 = pcg.next_f64();
+	let r1 = pcg.gen::<f64>();
+	let r2 = pcg.gen::<f64>();
     let phi = 2.0*PI*r1;
     let p = (1.0-r2*r2).sqrt();
 	let (t3, t1, t2) = make_basis_vectors(normal);
@@ -416,10 +415,10 @@ pub fn random_lambertian_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta:
 	let r1_sqrt_max = max_theta.cos();
 	let r1_min = r1_sqrt_min*r1_sqrt_min;
 	let r1_max = r1_sqrt_max*r1_sqrt_max;
-	let mut r1 = pcg.next_f64();
+	let mut r1 = pcg.gen::<f64>();
 	r1 *= r1_max-r1_min;
 	r1 += r1_min;
-	let r2 = pcg.next_f64();
+	let r2 = pcg.gen::<f64>();
 	let sintheta = (1.0-r1).sqrt();
 	let costheta = r1.sqrt();
 	let phi = 2.0*PI*r2;
@@ -434,8 +433,8 @@ pub fn random_uniform_on_stripe(normal: [f64; 3], pcg: &mut Pcg32, min_theta: f6
 	let r2_sqrt_max = min_theta.cos();
 	let r2_min = r2_sqrt_min*r2_sqrt_min;
 	let r2_max = r2_sqrt_max*r2_sqrt_max;
-	let r1 = pcg.next_f64();
-	let mut r2 = pcg.next_f64();
+	let r1 = pcg.gen::<f64>();
+	let mut r2 = pcg.gen::<f64>();
 	r2 *= r2_max-r2_min;
 	r2 += r2_min;
     let phi = 2.0*PI*r1;

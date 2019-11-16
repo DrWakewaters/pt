@@ -1,9 +1,9 @@
 use std::f64::MAX;
 
-use math::{add, add_f32, mul};
-use rendereroutput::RendererOutput;
+use crate::math::{add, add_f32, mul};
+use crate::rendereroutput::RendererOutput;
 
-use NUMBER_OF_BINS;
+use crate::NUMBER_OF_BINS;
 
 pub struct RHF {
 	width: i32,

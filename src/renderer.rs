@@ -1,16 +1,16 @@
 use std::f64;
 
-use rand::{OsRng, Rng};
 use pcg_rand::Pcg32;
+use rand::{Rng, SeedableRng};
 
-use hitpoint::Hitpoint;
-use math::{add, brdf, dot, elementwise_mul, intensity_to_color, min, mul, norm, random_from_brdf, sub};
-use ray::Ray;
-use renderershape::RendererShape;
-use rendereroutputpixel::RendererOutputPixel;
-use rendererscene::RendererScene;
+use crate::hitpoint::Hitpoint;
+use crate::math::{add, brdf, dot, elementwise_mul, intensity_to_color, min, mul, norm, random_from_brdf, sub};
+use crate::ray::Ray;
+use crate::renderershape::RendererShape;
+use crate::rendereroutputpixel::RendererOutputPixel;
+use crate::rendererscene::RendererScene;
 
-use NUMBER_OF_BINS;
+use crate::NUMBER_OF_BINS;
 
 //static MODULO: [usize; 5] = [0, 1, 2, 0, 1];
 
@@ -55,7 +55,7 @@ impl Renderer {
 		let number_of_cameras = self.scene.cameras.len();
 		self.renderer_output_pixels.push(RendererOutputPixel::new(y, x));
 		let last_pos = self.renderer_output_pixels.len()-1;
-		let mut pcg: Pcg32 = OsRng::new().unwrap().gen();
+		let mut pcg: Pcg32 = Pcg32::from_entropy();
 		let mut colors: Vec<[f64; 3]> = Vec::new();
 		let mut converged = false;
 		// Loop over this pixel until we estimate the error to be small enough.
@@ -108,11 +108,10 @@ impl Renderer {
 			} else {
 				self.maximum_distance(&averages)
 			};
-			if iterations%50 == 0 {
-				println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}).", iterations, x, y, error, self.maximum_error);
-			}
 			if error < self.maximum_error || iterations*self.spp_per_iteration >= self.maximum_spp {
 				converged = true;
+			} else if iterations%50 == 0 {
+				println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}.", iterations, x, y, error, self.maximum_error);
 			}
 		}
 		if x == self.width/2 {
@@ -186,7 +185,7 @@ impl Renderer {
 		let bullet_probability = 0.0;
 		let survival_boost_factor = 1.0/(1.0-bullet_probability);
 		loop {
-			let r = pcg.next_f64();
+			let r = pcg.gen::<f64>();
 			if r < bullet_probability {
 				return;
 			} else {
@@ -217,12 +216,14 @@ impl Renderer {
 		}
 	}
 
+	// @TODO: Implement support of triangular lightsources.
 	fn connect_and_compute_color(&self, hitpoint_in_camera_path: &Hitpoint, mut pcg: &mut Pcg32) -> [f64; 3] {
 		let number_of_light_spheres = self.scene.light_spheres.len();
 		let number_of_cameras = self.scene.cameras.len();
 		let random_exclusive_max_cameras: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_cameras as u32);
 		let index = (pcg.gen_range(0, random_exclusive_max_cameras)%(number_of_light_spheres as u32)) as usize;
 		let light_position = self.scene.light_spheres[index].get_position(&mut pcg);
+		// @TODO: Should it not be .emission rather than .color?
 		let light_color = self.scene.light_spheres[index].color;
 		let direction = sub(hitpoint_in_camera_path.position, light_position);
 		let distance = norm(direction);
@@ -232,6 +233,7 @@ impl Renderer {
 		}
 		let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(light_position, direction_normalised));
 		if let Some(closest_hitpoint) = closest_hitpoint {
+			// @TODO Check if this is sane.
 			if distance-closest_hitpoint.distance > 1.0e-9 {
 				return [0.0, 0.0, 0.0];
 			}

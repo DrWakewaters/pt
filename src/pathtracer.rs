@@ -2,15 +2,16 @@ use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread::{JoinHandle, spawn};
+
 use time::now;
 
-use physicsscene::PhysicsScene;
-use pngfile::{make_file, read_frame, read_scene, write_frame, write_scene};
-use renderer::Renderer;
-use rendererscene::RendererScene;
-use rendereroutput::RendererOutput;
-use rendereroutputpixel::RendererOutputPixel;
-use rhf::RHF;
+use crate::physicsscene::PhysicsScene;
+use crate::pngfile::{make_file, read_frame, read_scene, write_frame, write_scene};
+use crate::renderer::Renderer;
+use crate::rendererscene::RendererScene;
+use crate::rendereroutput::RendererOutput;
+use crate::rendereroutputpixel::RendererOutputPixel;
+use crate::rhf::RHF;
 
 pub struct Pathtracer {
 	width: u32,
@@ -94,7 +95,7 @@ impl Pathtracer {
 					self.write_to_image(&mut renderer_output, i+1);
 				}
 			}
-			self.simulate_physics(&mut physics_scene);
+			//self.simulate_physics(&mut physics_scene);
 			self.frame_number += 1;
 		}
 	}
@@ -153,7 +154,7 @@ impl Pathtracer {
 				let mut renderer = Renderer::new(width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, renderer_scene_clone);
 				for y in 0..height {
 					for x in 0..width {
-						let mut pixel_rendered = {
+						let pixel_rendered = {
 							// @TODO: Get rid of unwrap().
 							let mut pixels_rendered = pixels_rendered_clone.lock().unwrap();
 							let pixel_rendered = pixels_rendered[y as usize][x as usize];
@@ -210,6 +211,7 @@ impl Pathtracer {
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
 	}
 
+	#[allow(dead_code)]
 	fn simulate_physics(&self, physics_scene: &mut PhysicsScene) {
 		let tm = now();
 		print!("Simulating starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);

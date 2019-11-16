@@ -1,3 +1,5 @@
+use serde_derive::{Serialize, Deserialize};
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Material {
     pub color: [f64; 3],

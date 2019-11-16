@@ -1,5 +1,7 @@
-use material::Material;
-use physics::Physics;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::material::Material;
+use crate::physics::Physics;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PhysicsSphere {

@@ -3,12 +3,12 @@ use std::result::Result;
 use std::fs::File;
 
 use bincode::{serialize_into, deserialize_from};
-use png::{BitDepth, ColorType, Encoder, HasParameters};
+use png::{BitDepth, ColorType, Encoder};
 use time::now;
 
-use datafordrawing::DataForDrawing;
-use physicsscene::PhysicsScene;
-use rendereroutput::RendererOutput;
+use crate::datafordrawing::DataForDrawing;
+use crate::physicsscene::PhysicsScene;
+use crate::rendereroutput::RendererOutput;
 
 pub fn make_file(mut renderer_output: &mut RendererOutput, image_filename: &str) {
 	let data_for_drawing = DataForDrawing::new(&mut renderer_output);
@@ -43,7 +43,8 @@ fn draw_frame(image_filename: &str, data_for_drawing: &DataForDrawing) -> Result
 	let file = File::create(image_filename)?;
 	let buf_writer = &mut BufWriter::new(file);
 	let mut encoder = Encoder::new(buf_writer, data_for_drawing.width, data_for_drawing.height);
-	encoder.set(ColorType::RGB).set(BitDepth::Eight);
+	encoder.set_color(ColorType::RGB);
+	encoder.set_depth(BitDepth::Eight);
 	let mut writer = encoder.write_header()?;
 	writer.write_image_data(&data_for_drawing.colors)?;
 	Ok(())

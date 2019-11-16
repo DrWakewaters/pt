@@ -1,3 +1,5 @@
+use serde_derive::{Serialize, Deserialize};
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Physics {
     pub local_x: [f64; 3],

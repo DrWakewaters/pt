@@ -1,4 +1,4 @@
-use material::Material;
+use crate::material::Material;
 
 pub struct Hitpoint {
     pub position: [f64; 3],

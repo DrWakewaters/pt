@@ -1,4 +1,4 @@
-use NUMBER_OF_BINS;
+use crate::NUMBER_OF_BINS;
 
 #[derive(Clone)]
 pub struct Pixel {

@@ -2,6 +2,7 @@
 name = "pt"
 version = "0.1.0"
 authors = ["Christian <christian-carlsson@outlook.com>"]
+edition = "2018"
 
 [dependencies]
 serde = "*"
@@ -11,7 +12,6 @@ png = "*"
 cgmath = "*"
 pcg_rand = "*"
 rand = "*"
-simd = "*"
 time = "*"
 
 [features]

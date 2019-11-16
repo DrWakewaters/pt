@@ -1,6 +1,7 @@
 use pcg_rand::Pcg32;
+use serde_derive::{Serialize, Deserialize};
 
-use math::{add, mul, random_uniform_on_sphere};
+use crate::math::{add, mul, random_uniform_on_sphere};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LightSphere {

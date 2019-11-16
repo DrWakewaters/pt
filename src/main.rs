@@ -1,10 +1,3 @@
-extern crate bincode;
-extern crate pcg_rand;
-extern crate png;
-extern crate rand;
-#[macro_use] extern crate serde_derive;
-extern crate time;
-
 mod camera;
 mod collisiontype;
 mod datafordrawing;
@@ -41,7 +34,7 @@ fn main() {
 	let post_process_data = false;
 	match current_dir() {
 		Ok(directory) => {
-			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 500, 500_000, 5000.0, 200.0, false, directory);
+			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 3000, 500_000, 20.0, 1000.0, false, directory);
 			if post_process_data {
 				pathtracer.post_process_data();
 			} else {

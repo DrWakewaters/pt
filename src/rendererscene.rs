@@ -1,8 +1,10 @@
-use camera::Camera;
-use lightsphere::LightSphere;
-use physicsscene::PhysicsScene;
-use renderersphere::RendererSphere;
-use renderertriangle::RendererTriangle;
+use serde_derive::{Serialize, Deserialize};
+
+use crate::camera::Camera;
+use crate::lightsphere::LightSphere;
+use crate::physicsscene::PhysicsScene;
+use crate::renderersphere::RendererSphere;
+use crate::renderertriangle::RendererTriangle;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RendererScene {
