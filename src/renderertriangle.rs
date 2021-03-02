@@ -5,7 +5,6 @@ use serde_derive::{Serialize, Deserialize};
 use crate::material::Material;
 use crate::math::{cross, dot, sub};
 use crate::physicstriangle::PhysicsTriangle;
-use crate::ray::Ray;
 use crate::renderershape::RendererShape;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -35,20 +34,20 @@ impl RendererTriangle {
 
 // See http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.189.5084&rep=rep1&type=pdf.
 impl RendererShape for RendererTriangle {
-	fn distance(&self, ray: &Ray) -> f64 {
-		let h = cross(ray.direction, self.e2);
+	fn distance(&self, position: [f64; 3], direction: [f64; 3]) -> f64 {
+		let h = cross(direction, self.e2);
 		let a = dot(self.e1, h);
 		if a.abs() < 1.0e-6 {
 			return f64::MAX;
 		}
 		let f = 1.0/a;
-		let s = sub(ray.position, self.node0);
+		let s = sub(position, self.node0);
 		let u = f*dot(s, h);
 		if u < 1.0e-6 || u > 1.0-1.0e-6 {
 			return f64::MAX;
 		}
 		let q = cross(s, self.e1);
-		let v = f*dot(ray.direction, q);
+		let v = f*dot(direction, q);
 		if v < 1.0e-6 || u+v > 1.0-1.0e-6 {
 			return f64::MAX;
 		}

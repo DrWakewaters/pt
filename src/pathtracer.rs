@@ -24,13 +24,12 @@ pub struct Pathtracer {
 	spp_per_iteration: u32,
 	maximum_spp: u32,
 	maximum_error: f64,
-	maximum_brdf_value: f64,
 	perform_post_process: bool,
 	current_directory: PathBuf,
 }
 
 impl Pathtracer {
-	pub fn new(width: u32, height: u32, frame_number: u32, number_of_threads: usize, continue_old_simulation: bool, post_process_data: Vec<(f64, i32)>, search_window_radius: i32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, maximum_brdf_value: f64, perform_post_process: bool, current_directory: PathBuf) -> Self {
+	pub fn new(width: u32, height: u32, frame_number: u32, number_of_threads: usize, continue_old_simulation: bool, post_process_data: Vec<(f64, i32)>, search_window_radius: i32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, perform_post_process: bool, current_directory: PathBuf) -> Self {
 		Self {
 			width,
 			height,
@@ -42,7 +41,6 @@ impl Pathtracer {
 			spp_per_iteration,
 			maximum_spp,
 			maximum_error,
-			maximum_brdf_value,
 			perform_post_process,
 			current_directory,
 		}
@@ -149,9 +147,9 @@ impl Pathtracer {
 		let mut threads: Vec<JoinHandle<_>> = Vec::new();
 		for _ in 0..self.number_of_threads {
 			let renderer_scene_clone = renderer_scene.clone();
-			let (width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, pixels_rendered_clone) = (self.width, self.height, self.spp_per_iteration, self.maximum_spp, self.maximum_error, self.maximum_brdf_value, self.perform_post_process, pixels_rendered.clone());
+			let (width, height, spp_per_iteration, maximum_spp, maximum_error, perform_post_process, pixels_rendered_clone) = (self.width, self.height, self.spp_per_iteration, self.maximum_spp, self.maximum_error, self.perform_post_process, pixels_rendered.clone());
 			threads.push(spawn(move || {
-				let mut renderer = Renderer::new(width, height, spp_per_iteration, maximum_spp, maximum_error, maximum_brdf_value, perform_post_process, renderer_scene_clone);
+				let mut renderer = Renderer::new(width, height, spp_per_iteration, maximum_spp, maximum_error, perform_post_process, renderer_scene_clone);
 				for y in 0..height {
 					for x in 0..width {
 						let pixel_rendered = {

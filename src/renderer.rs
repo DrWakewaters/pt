@@ -4,8 +4,8 @@ use pcg_rand::Pcg32;
 use rand::{Rng, SeedableRng};
 
 use crate::hitpoint::Hitpoint;
-use crate::math::{add, brdf, dot, elementwise_mul, intensity_to_color, min, mul, norm, random_from_brdf, sub};
-use crate::ray::Ray;
+use crate::material::Material;
+use crate::math::{add, dot, elementwise_mul, intensity_to_color, mul, random_from_brdf};
 use crate::renderershape::RendererShape;
 use crate::rendereroutputpixel::RendererOutputPixel;
 use crate::rendererscene::RendererScene;
@@ -20,14 +20,13 @@ pub struct Renderer {
 	spp_per_iteration: u32,
 	maximum_spp: u32,
 	maximum_error: f64,
-	maximum_brdf_value: f64,
 	perform_post_process: bool,
 	scene: RendererScene,
 	renderer_output_pixels: Vec<RendererOutputPixel>
 }
 
 impl Renderer {
-	pub fn new(width: u32, height: u32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, maximum_brdf_value: f64, perform_post_process: bool, scene: RendererScene) -> Self {
+	pub fn new(width: u32, height: u32, spp_per_iteration: u32, maximum_spp: u32, maximum_error: f64, perform_post_process: bool, scene: RendererScene) -> Self {
 		let renderer_output_pixels: Vec<RendererOutputPixel> = Vec::new();
 		Self {
 			width,
@@ -35,7 +34,6 @@ impl Renderer {
 			spp_per_iteration,
 			maximum_spp,
 			maximum_error,
-			maximum_brdf_value,
 			perform_post_process,
 			scene,
 			renderer_output_pixels,
@@ -50,9 +48,6 @@ impl Renderer {
 		if x == self.width/2 {
 			println!("Rendering row {} of {}.", y, self.height);
 		}
-		let number_of_light_spheres = self.scene.light_spheres.len();
-		let random_exclusive_max_lights: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_light_spheres as u32);
-		let number_of_cameras = self.scene.cameras.len();
 		self.renderer_output_pixels.push(RendererOutputPixel::new(y, x));
 		let last_pos = self.renderer_output_pixels.len()-1;
 		let mut pcg: Pcg32 = Pcg32::from_entropy();
@@ -64,34 +59,11 @@ impl Renderer {
 			iterations += 1;
 			for _ in 0..self.spp_per_iteration {
 				// Create a hitpoint path starting from the camera. The first hitpoint will be the hitpoint of the ray coming from the retina, through the pinhole of the camera - that is, it is a point somewhere on a renderer shape.
-				let mut hitpoint_path_from_camera: Vec<Hitpoint> = Vec::new();
 				self.renderer_output_pixels[last_pos].number_of_rays += 1.0;
-				let index = (pcg.gen_range(0, random_exclusive_max_lights)%(number_of_cameras as u32)) as usize;
-				let mut ray = self.scene.cameras[index].create_ray(x, y, self.width, self.height, &mut pcg);
-				let mut color = self.scene.cameras[index].color;
-				self.create_hitpoint_path(&mut ray, &mut color, &mut hitpoint_path_from_camera, &mut pcg);
-				let mut total_color = [0.0, 0.0, 0.0];
-				if hitpoint_path_from_camera.is_empty() {
-					colors.push(total_color);
-					continue;
-				}
-				let direct_light_sampling = false;
-				if direct_light_sampling {
-					// Connect the camera path hitpoints with points on lights.
-					for hitpoint_in_camera_path in &hitpoint_path_from_camera {
-						let color = self.connect_and_compute_color(hitpoint_in_camera_path, &mut pcg);
-						total_color = add(total_color, color);
-					}
-					self.store(last_pos, total_color);
-					colors.push(total_color);
-				} else {
-					for hitpoint in hitpoint_path_from_camera.iter().rev() {
-						total_color = elementwise_mul(total_color, hitpoint.material.color);
-						total_color = add(total_color, hitpoint.material.emission);
-					}
-					self.store(last_pos, total_color);
-					colors.push(total_color);
-				}
+				let (position, direction) = self.scene.camera.create_ray(x, y, self.width, self.height, &mut pcg);
+				let color = self.compute_color(position, direction, self.scene.camera.color, &mut pcg);
+				self.store(last_pos, color);
+				colors.push(color);
 			}
 			if colors.is_empty() {
 				break;
@@ -108,14 +80,14 @@ impl Renderer {
 			} else {
 				self.maximum_distance(&averages)
 			};
-			if error < self.maximum_error || iterations*self.spp_per_iteration >= self.maximum_spp {
+			if error < self.maximum_error {
 				converged = true;
-			} else if iterations%50 == 0 {
+			} else if iterations*self.spp_per_iteration >= self.maximum_spp {
+				converged = true;
+				println!("Failed to converge at ({}, {}). The error is {} whereas the goal was {}.", x, y, error, self.maximum_error);
+			} else if iterations%100 == 0 {
 				println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}.", iterations, x, y, error, self.maximum_error);
 			}
-		}
-		if x == self.width/2 {
-			println!("Iterations needed at ({}, {}): {}.", x, y, iterations);
 		}
 	}
 
@@ -181,79 +153,65 @@ impl Renderer {
 		max_r_distance+max_g_distance+max_b_distance
 	}
 
-	fn create_hitpoint_path(&mut self, mut ray: &mut Ray, color: &mut [f64; 3], hitpoint_path: &mut Vec<Hitpoint>, pcg: &mut Pcg32) {
+	fn compute_color(&mut self, position: [f64; 3], direction: [f64; 3], color: [f64; 3], pcg: &mut Pcg32) -> [f64; 3] {
+		let mut color = color;
 		let bullet_probability = 0.0;
 		let survival_boost_factor = 1.0/(1.0-bullet_probability);
+		let mut hitpoint = Hitpoint::new(position, direction, [0.0, 0.0, 0.0], Material::none(), true, false);
+		let light_sampling_probability = 0.0;
 		loop {
 			let r = pcg.gen::<f64>();
 			if r < bullet_probability {
-				return;
+				return [0.0, 0.0, 0.0]
 			} else {
-				*color = mul(survival_boost_factor, *color);
+				color = mul(survival_boost_factor, color);
 			}
-			let hitpoint = self.closest_renderer_shape(&mut ray);
-			if let Some(mut hitpoint) = hitpoint {
-				let ingoing_direction = mul(-1.0, ray.direction);
-				let (refractive_index_1, refractive_index_2) = if hitpoint.hit_from_outside {
-					(1.0, hitpoint.material.refractive_index)
-				} else {
-					(hitpoint.material.refractive_index, 1.0)
-				};
-				let normal = if dot(ingoing_direction, hitpoint.normal) > 0.0 {
-					hitpoint.normal
-				} else {
-					mul(-1.0, hitpoint.normal)
-				};
-				let (direction, _) = random_from_brdf(ingoing_direction, normal, hitpoint.material, refractive_index_1, refractive_index_2, pcg);
-				ray.position = hitpoint.position;
-				ray.direction = direction;
-				*color = elementwise_mul(*color, hitpoint.material.color);
-				hitpoint.accumulated_color = *color;
-				hitpoint_path.push(hitpoint);
+			let hit_renderer_shape = self.closest_renderer_shape(&mut hitpoint);
+			if hit_renderer_shape {
+				color = elementwise_mul(color, hitpoint.material.color);
+				if hitpoint.material.is_light {
+					return color
+				}
+				let mut light_sampling_possible = false;
+				let mut brdf_modifier = 0.0;
+				random_from_brdf(&mut hitpoint, &mut self.scene.light_spheres, light_sampling_probability, &mut light_sampling_possible, &mut brdf_modifier, pcg);
+				if light_sampling_possible {
+					// @TODO: Add support for transmission.
+					color = mul(brdf_modifier, color);
+				}
 			} else {
-				return;
+				return [0.0, 0.0, 0.0]
 			}
 		}
 	}
 
-	// @TODO: Implement support of triangular lightsources.
-	fn connect_and_compute_color(&self, hitpoint_in_camera_path: &Hitpoint, mut pcg: &mut Pcg32) -> [f64; 3] {
-		let number_of_light_spheres = self.scene.light_spheres.len();
-		let number_of_cameras = self.scene.cameras.len();
-		let random_exclusive_max_cameras: u32 = <u32>::max_value() - <u32>::max_value()%(number_of_cameras as u32);
-		let index = (pcg.gen_range(0, random_exclusive_max_cameras)%(number_of_light_spheres as u32)) as usize;
-		let light_position = self.scene.light_spheres[index].get_position(&mut pcg);
-		// @TODO: Should it not be .emission rather than .color?
-		let light_color = self.scene.light_spheres[index].color;
-		let direction = sub(hitpoint_in_camera_path.position, light_position);
-		let distance = norm(direction);
-		let direction_normalised = mul(1.0/distance, direction);
-		if dot(hitpoint_in_camera_path.normal, direction_normalised) > 0.0 {
-			return [0.0, 0.0, 0.0];
-		}
-		let closest_hitpoint = self.closest_renderer_shape(&mut Ray::new(light_position, direction_normalised));
-		if let Some(closest_hitpoint) = closest_hitpoint {
-			// @TODO Check if this is sane.
-			if distance-closest_hitpoint.distance > 1.0e-9 {
-				return [0.0, 0.0, 0.0];
-			}
-		}
-		let ingoing_direction = mul(-1.0, hitpoint_in_camera_path.incoming_direction);
-		let outgoing_direction = mul(-1.0, direction_normalised);
-		let normal = if dot(ingoing_direction, hitpoint_in_camera_path.normal) > 0.0 {
-			hitpoint_in_camera_path.normal
-		} else {
-			mul(-1.0, hitpoint_in_camera_path.normal)
-		};
-		let (refractive_index_1, refractive_index_2) = if hitpoint_in_camera_path.hit_from_outside {
-			(1.0, hitpoint_in_camera_path.material.refractive_index)
-		} else {
-			(hitpoint_in_camera_path.material.refractive_index, 1.0)
-		};
-		// @TODO: Get rid of the upper limit of the brdf.
-		let brdf = min(brdf(ingoing_direction, outgoing_direction, normal, refractive_index_1, refractive_index_2, hitpoint_in_camera_path.material), self.maximum_brdf_value);
-		mul(brdf/(distance*distance), elementwise_mul(hitpoint_in_camera_path.accumulated_color, light_color))
-	}
+// rP: probability that an interation is a reflection
+// sP: probability that a reflection is specular
+// lBr: lambertian_brdf_reflection
+// sBr: specular_brdf_reflection
+// lBt: lambertian_brdf_transmission
+// sBt: specular_brdf_transmission
+// aP: light_sampling_probability
+// aB: light_brdf
+
+// Return correct/actual (correct probability density / the actual probability density).
+// With transmission:
+// correct = (1-sP)*lBr*rP + sP*sBr*rP + (1-sP)*lBt*(1-rP) + sP*sBt*(1-rP)
+// actual = (1-aP)*correct + aP*aB
+// Without transmission:
+// correct = (1-sP)*lBr + sP*sBr
+// actual = (1-aP)*correct + aP*aB
+
+// I en process kan resultaten 1-7 ges. 1-3: 20 % sannolikhet var, 4-7: 10 % sannolikhet var.
+// I själva verket dras dock 1-2 med sannolikheten 25 % var och 3-7 med 10 % sannolikhet var.
+// Resultatet blir det tal som väljs. Hur får vi rätt väntevärde?
+// Om vi får 1: Mult med 0.2/0.25 = 0.8
+// Om vi får 2: Mult med 0.2/0.25 = 0.8
+// Om vi får 3: Mult med 0.2/0.1 = 2
+// Om vi får 4: Mult med 0.1/0.1 = 1
+// Om vi får 5: Mult med 0.1/0.1 = 1
+// Om vi får 6: Mult med 0.1/0.1 = 1
+// Om vi får 7: Mult med 0.1/0.1 = 1
 
 	fn store(&mut self, last_pos: usize, color: [f64; 3]) {
 		self.renderer_output_pixels[last_pos].pixel.color = add(self.renderer_output_pixels[last_pos].pixel.color, color);
@@ -268,19 +226,21 @@ impl Renderer {
 	}
 
 	// Find the closest hitpoint.
-	fn closest_renderer_shape(&self, ray: &mut Ray) -> Option<Hitpoint>  {
+	fn closest_renderer_shape(&self, mut hitpoint: &mut Hitpoint) -> bool  {
 		let mut min_distance = f64::MAX;
 		let mut closest_renderer_shape_index: Option<usize> = None;
 		let mut closest_is_a_sphere = true;
+		let position = hitpoint.position;
+		let direction = hitpoint.incoming_direction;
 		for (i, sphere) in self.scene.renderer_spheres.iter().enumerate() {
-			let distance = sphere.distance(&ray);
+			let distance = sphere.distance(position, direction);
 			if distance < min_distance {
 				min_distance = distance;
 				closest_renderer_shape_index = Some(i);
 			}
 		}
 		for (i, triangle) in self.scene.renderer_triangles.iter().enumerate() {
-			let distance = triangle.distance(&ray);
+			let distance = triangle.distance(position, direction);
 			if distance < min_distance {
 				min_distance = distance;
 				closest_renderer_shape_index = Some(i);
@@ -288,8 +248,8 @@ impl Renderer {
 			}
 		}
 		if let Some(index) = closest_renderer_shape_index {
-			let position = add(ray.position, mul(min_distance, ray.direction));
-			let normal = if closest_is_a_sphere {
+			let position = add(position, mul(min_distance, direction));
+			let mut normal = if closest_is_a_sphere {
 				self.scene.renderer_spheres[index].normal(position)
 			} else {
 				self.scene.renderer_triangles[index].normal(position)
@@ -299,10 +259,15 @@ impl Renderer {
 			} else {
 				self.scene.renderer_triangles[index].material()
 			};
-			let hit_from_outside = dot(ray.direction, normal) < 0.0;
-			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, hit_from_outside, false, [0.0, 0.0, 0.0]))
+			if dot(direction, normal) > 0.0 {
+				normal = mul(-1.0, normal);
+			}
+			hitpoint.position = position;
+			hitpoint.normal = normal;
+			hitpoint.material = material;
+			true
 		} else {
-			None
+			false
 		}
 	}
 }

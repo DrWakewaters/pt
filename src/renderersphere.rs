@@ -5,7 +5,6 @@ use serde_derive::{Serialize, Deserialize};
 use crate::material::Material;
 use crate::math::{dot, normalised, sub};
 use crate::physicssphere::PhysicsSphere;
-use crate::ray::Ray;
 use crate::renderershape::RendererShape;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -26,14 +25,14 @@ impl RendererSphere {
 }
 
 impl RendererShape for RendererSphere {
-	fn distance(&self, ray: &Ray) -> f64 {
-		let b = sub(ray.position, self.position);
-		let a = dot(b, ray.direction)*dot(b, ray.direction) - dot(b, b) + self.radius*self.radius;
+	fn distance(&self, position: [f64; 3], direction: [f64; 3]) -> f64 {
+		let b = sub(position, self.position);
+		let a = dot(b, direction)*dot(b, direction) - dot(b, b) + self.radius*self.radius;
 		if a < 1.0e-6 {
 			return f64::MAX;
 		}
-		let d1 = -1.0*dot(sub(ray.position, self.position), ray.direction) + a.sqrt();
-		let d2 = -1.0*dot(sub(ray.position, self.position), ray.direction) - a.sqrt();
+		let d1 = -1.0*dot(sub(position, self.position), direction) + a.sqrt();
+		let d2 = -1.0*dot(sub(position, self.position), direction) - a.sqrt();
 		if d2 > 1.0e-6 {
 			return d2;
 		} else if d1 > 1.0e-6 {

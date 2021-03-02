@@ -14,13 +14,12 @@ pub struct PhysicsScene {
 	pub physics_triangles: Vec<PhysicsTriangle>,
 	pub physics_spheres: Vec<PhysicsSphere>,
 	pub light_spheres: Vec<LightSphere>,
-	pub cameras: Vec<Camera>,
+	pub camera: Camera,
 }
 
 impl PhysicsScene {
 	pub fn new() -> Self {
 		// This scene is modelled after https://en.wikipedia.org/wiki/Path_tracing#/media/File:Path_tracing_001.png.
-		// The scene is difficult, due to having a somewhat small, distant lightsource and specular, transparent spheres. Since the path tracer is doing direct light sampling at every intersection (in fact, this is the only way we get any light - the lightsource is not considered a part of the scene in the ray-object intersection algorithm) we get okay convergence for diffuse materials, but specular, transparent ones gives huge variance and slow convergence.
 		let nodes = vec![
 		// Left wall
 		[-600.0, 1000.0, -1500.0],		// 0
@@ -49,19 +48,22 @@ impl PhysicsScene {
 		[0.0, -1000.0, 1000.0],			// 19
 		];
 
-		let white_diffuse_opaque_emissive = Material::new([0.8, 0.8, 0.8], [1.0, 1.0, 1.0], 0.0, 1.0, 0.0, true);
+		let white_diffuse_opaque_emissive = Material::new([1.0, 1.0, 1.0], 0.0, 0.0, 0.0, true, true);
 
-		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
-		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 0.1, 0.03, 0.0, true);
-		let white_specular_opaque = Material::new([0.8, 0.8, 0.8], [0.0, 0.0, 0.0], 1.0, 0.03, 0.0, true);
+		let white_diffuse_opaque = Material::new([0.8, 0.8, 0.8], 0.0, 0.0, 0.0, true, false);
+		let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.0, 0.0, 0.0, true, false);
+		let white_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.0, 0.0, 0.0, true, false);
+		//let white_semi_specular_opaque = Material::new([0.8, 0.8, 0.8], 0.1, 0.03, 0.0, true, false);
+		//let white_specular_opaque = Material::new([0.8, 0.8, 0.8], 1.0, 0.03, 0.0, true, false);
 
-		//let white_diffuse_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 0.0, 0.01, 1.4, false);
-		let white_semi_specular_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 0.1, 0.03, 1.4, false);
-		let white_specular_transparent = Material::new([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], 1.0, 0.03, 1.4, false);
+		let white_semi_specular_transparent = Material::new([0.8, 0.8, 0.8], 0.0, 0.0, 0.0, true, false);
+		let white_specular_transparent = Material::new([0.8, 0.8, 0.8], 0.0, 0.0, 0.0, true, false);
+		//let white_semi_specular_transparent = Material::new([1.0, 1.0, 1.0], 0.01, 0.1, 1.4, false, false);
+		//let white_specular_transparent = Material::new([1.0, 1.0, 1.0], 1.0, 0.005, 1.4, false, false);
 
-		let green_diffuse_opaque = Material::new([0.15, 0.65, 0.15], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
-		let red_diffuse_opaque = Material::new([0.65, 0.15, 0.15], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
-		let blue_diffuse_opaque = Material::new([0.15, 0.15, 0.65], [0.0, 0.0, 0.0], 0.0, 0.03, 0.0, true);
+		let green_diffuse_opaque = Material::new([0.15, 0.65, 0.15], 0.0, 0.0, 0.0, true, false);
+		let red_diffuse_opaque = Material::new([0.65, 0.15, 0.15], 0.0, 0.0, 0.0, true, false);
+		let blue_diffuse_opaque = Material::new([0.15, 0.15, 0.65], 0.0, 0.0, 0.0, true, false);
 
 		let local_x = [1.0, 0.0, 0.0];
 		let local_y = [0.0, 1.0, 0.0];
@@ -91,51 +93,48 @@ impl PhysicsScene {
 
 		let physics_triangle = Physics::new(local_x, local_y, local_z, [1.0, 0.0, 0.0], 0.0, [0.0, 0.0, 0.0], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], 0.0, false);
 
-		let mut physics_spheres: Vec<PhysicsSphere> = Vec::new();
-		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_semi_specular_opaque, physics_large_radius));
-		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_specular_opaque, physics_large_radius));
+		let physics_spheres: Vec<PhysicsSphere> = vec![
+			PhysicsSphere::new([0.0, 1000.0-large_radius, 600.0], large_radius, white_diffuse_opaque, physics_large_radius),
+			PhysicsSphere::new([500.0, 1000.0-large_radius, 600.0], large_radius, white_semi_specular_opaque, physics_large_radius),
+			PhysicsSphere::new([1000.0, 1000.0-large_radius, 600.0], large_radius, white_specular_opaque, physics_large_radius),
+			PhysicsSphere::new([0.0, 1000.0-small_radius, 370.0], small_radius, red_diffuse_opaque, physics_small_radius),
+			PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_semi_specular_transparent, physics_small_radius),
+			PhysicsSphere::new([500.0, 1000.0-small_radius, 370.0], small_radius, blue_diffuse_opaque, physics_small_radius),
+			PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_specular_transparent, physics_small_radius),
+			PhysicsSphere::new([1000.0, 1000.0-small_radius, 370.0], small_radius, green_diffuse_opaque, physics_small_radius),
+			PhysicsSphere::new([-150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius),
+			PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius),
+			PhysicsSphere::new([1150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius),
+			PhysicsSphere::new(light_position, light_radius, white_diffuse_opaque_emissive, physics_light_radius)
+		];
 
-		physics_spheres.push(PhysicsSphere::new([0.0, 1000.0-small_radius, 370.0], small_radius, red_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([250.0, 1000.0-small_radius, 370.0], small_radius, white_semi_specular_transparent, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 1000.0-small_radius, 370.0], small_radius, blue_diffuse_opaque, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([750.0, 1000.0-small_radius, 370.0], small_radius, white_specular_transparent, physics_small_radius));
-		physics_spheres.push(PhysicsSphere::new([1000.0, 1000.0-small_radius, 370.0], small_radius, green_diffuse_opaque, physics_small_radius));
-
-		physics_spheres.push(PhysicsSphere::new([-150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
-		physics_spheres.push(PhysicsSphere::new([500.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
-		physics_spheres.push(PhysicsSphere::new([1150.0, 200.0, 370.0], middle_radius, white_specular_transparent, physics_middle_radius));
-
-		physics_spheres.push(PhysicsSphere::new(light_position, light_radius, white_diffuse_opaque_emissive, physics_light_radius));
-
-		let mut physics_triangles: Vec<PhysicsTriangle> = Vec::new();
-		// Left wall.
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [3, 1, 0], white_diffuse_opaque, physics_triangle));
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [3, 2, 1], white_diffuse_opaque, physics_triangle));
-		// Right wall.
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [7, 5, 4], white_diffuse_opaque, physics_triangle));
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [7, 6, 5], white_diffuse_opaque, physics_triangle));
-		// Far wall.
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [11, 9, 8], white_diffuse_opaque, physics_triangle));
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [11, 10, 9], white_diffuse_opaque, physics_triangle));
-		// Floor.
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [15, 13, 12], white_diffuse_opaque, physics_triangle));
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [15, 14, 13], white_diffuse_opaque, physics_triangle));
-		// Top.
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [19, 17, 16], white_diffuse_opaque, physics_triangle));
-		physics_triangles.push(PhysicsTriangle::new(&nodes, [19, 18, 17], white_diffuse_opaque, physics_triangle));
+		let physics_triangles: Vec<PhysicsTriangle> = vec![
+			// Left wall.
+			PhysicsTriangle::new(&nodes, [3, 1, 0], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [3, 2, 1], white_diffuse_opaque, physics_triangle),
+			// Right wall.
+			PhysicsTriangle::new(&nodes, [7, 5, 4], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [7, 5, 4], white_diffuse_opaque, physics_triangle),
+			// Far wall.
+			PhysicsTriangle::new(&nodes, [11, 9, 8], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [11, 10, 9], white_diffuse_opaque, physics_triangle),
+			// Floor.
+			PhysicsTriangle::new(&nodes, [15, 13, 12], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [15, 14, 13], white_diffuse_opaque, physics_triangle),
+			// Top.
+			PhysicsTriangle::new(&nodes, [19, 17, 16], white_diffuse_opaque, physics_triangle),
+			PhysicsTriangle::new(&nodes, [19, 18, 17], white_diffuse_opaque, physics_triangle)
+		];
 
 		let light_spheres = vec![
 		LightSphere::new(light_position, [1.0, 1.0, 1.0], light_radius),
 		];
-		let cameras = vec! [
-		Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], 1400.0, 10.0),
-		];
+		let camera = Camera::new([500.0, 500.0, -1000.0], [500.0, 500.0, -2000.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], 1400.0, 10.0);
 		Self {
 			physics_spheres,
 			physics_triangles,
 			light_spheres,
-			cameras,
+			camera,
 		}
 	}
 

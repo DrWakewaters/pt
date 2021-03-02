@@ -5,7 +5,6 @@ use rand::Rng;
 use serde_derive::{Serialize, Deserialize};
 
 use crate::math::{add, dot, mul, normalised, sub};
-use crate::ray::Ray;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Camera {
@@ -29,7 +28,7 @@ impl Camera {
 		}
 	}
 
-	pub fn create_ray(&self, x: u32, y: u32, width: u32, height: u32, pcg: &mut Pcg32) -> Ray {
+	pub fn create_ray(&self, x: u32, y: u32, width: u32, height: u32, pcg: &mut Pcg32) -> ([f64; 3], [f64; 3]) {
 		let r = pcg.gen::<f64>()*0.5;
 		let theta = pcg.gen::<f64>()*2.0*PI;
 		let dx = theta.cos()*r;
@@ -41,26 +40,6 @@ impl Camera {
 		let pinhole_translation = mul(self.pinhole_radius, [pcg.gen::<f64>(), pcg.gen::<f64>(), 0.0]);
 		let point_on_lens = add(self.pinhole, pinhole_translation);
 		direction = normalised(sub(point_on_focal_plane, point_on_lens));
-		Ray::new(point_on_lens, direction)
+		(point_on_lens, direction)
 	}
-	/*
-	pub fn retina_position(&self, ray: &mut Ray) -> Option<usize> {
-		let distance = dot(sub(self.retina_center, self.pinhole), self.retina_normal)/dot(mul(-1.0, ray.direction), self.retina_normal);
-		if distance < 0.0 {
-			return None;
-		}
-		let point_on_retina = add(mul(-1.0*distance, ray.direction), self.pinhole);
-		if (point_on_retina[2] - self.retina_center[2]).abs() > 1.0e-6 {
-			println!("Error: {} != {}", point_on_retina[2], self.retina_center[2]);
-			return None;
-		}
-		if point_on_retina[0] < 0.0 || point_on_retina[1] < 0.0 || point_on_retina[0] >= 1000.0 || point_on_retina[1] >= 1000.0 {
-			return None;
-		}
-		let x = (1000.0-point_on_retina[0]) as usize;
-		let y = (1000.0-point_on_retina[1]) as usize;
-		// @TODO self.width or something of the sort, instead of 1000.
-		Some(y*(1000 as usize)+x)
-	}
-	*/
 }

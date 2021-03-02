@@ -11,7 +11,7 @@ pub struct RendererScene {
 	pub light_spheres: Vec<LightSphere>,
 	pub renderer_spheres: Vec<RendererSphere>,
 	pub renderer_triangles: Vec<RendererTriangle>,
-	pub cameras: Vec<Camera>
+	pub camera: Camera
 }
 
 impl RendererScene {
@@ -28,15 +28,12 @@ impl RendererScene {
 		for physics_triangle in physics_scene.physics_triangles {
 			renderer_triangles.push(RendererTriangle::new(&physics_triangle));
 		}
-		let mut cameras: Vec<Camera> = Vec::new();
-		for camera in physics_scene.cameras {
-			cameras.push(camera);
-		}
+		let camera = physics_scene.camera;
 		Self {
 			light_spheres,
 			renderer_spheres,
 			renderer_triangles,
-			cameras,
+			camera,
 		}
 	}
 }
