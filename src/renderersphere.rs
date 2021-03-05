@@ -13,6 +13,7 @@ pub struct RendererSphere {
 	position: [f64; 3],
 	radius: f64,
 	material: Material,
+	pub active: bool
 }
 
 impl RendererSphere {
@@ -21,6 +22,7 @@ impl RendererSphere {
 			position: physics_sphere.position,
 			radius: physics_sphere.radius,
 			material: physics_sphere.material,
+			active: physics_sphere.active
 		}
 	}
 }

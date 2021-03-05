@@ -69,6 +69,12 @@ pub fn norm(vector: [f64; 3]) -> f64 {
 
 #[inline(always)]
 #[allow(dead_code)]
+pub fn norm_squared(vector: [f64; 3]) -> f64 {
+	(vector[0]*vector[0]+vector[1]*vector[1]+vector[2]*vector[2])
+}
+
+#[inline(always)]
+#[allow(dead_code)]
 pub fn distance(left: [f64; 3], right: [f64; 3]) -> f64 {
 	let vector = sub(left, right);
 	(vector[0]*vector[0]+vector[1]*vector[1]+vector[2]*vector[2]).sqrt()
@@ -78,7 +84,7 @@ pub fn distance(left: [f64; 3], right: [f64; 3]) -> f64 {
 #[allow(dead_code)]
 pub fn distance_squared(left: [f64; 3], right: [f64; 3]) -> f64 {
 	let vector = sub(left, right);
-	(vector[0]*vector[0]+vector[1]*vector[1]+vector[2]*vector[2])
+	vector[0]*vector[0]+vector[1]*vector[1]+vector[2]*vector[2]
 }
 
 #[inline(always)]

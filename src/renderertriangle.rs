@@ -17,6 +17,7 @@ pub struct RendererTriangle {
 	e2: [f64; 3],
 	normal: [f64; 3],
 	material: Material,
+	pub active: bool
 }
 
 impl RendererTriangle {
@@ -29,6 +30,7 @@ impl RendererTriangle {
 			e2: physics_triangle.e2,
 			normal: physics_triangle.normal,
 			material: physics_triangle.material,
+			active: physics_triangle.active
 		}
 	}
 }

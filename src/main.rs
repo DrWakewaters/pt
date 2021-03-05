@@ -7,6 +7,7 @@ mod material;
 mod math;
 mod pathtracer;
 mod physics;
+mod physicscylinder;
 mod physicsscene;
 mod physicssphere;
 mod physicstriangle;
@@ -16,10 +17,12 @@ mod ray;
 mod renderer;
 mod rendereroutput;
 mod rendereroutputpixel;
+mod renderercylinder;
 mod rendererscene;
 mod renderershape;
 mod renderersphere;
 mod renderertriangle;
+mod renderertype;
 mod rhf;
 
 use std::env::current_dir;
@@ -28,13 +31,13 @@ use pathtracer::Pathtracer;
 
 // Set it to 1 if we're not doing post-processing.
 const NUMBER_OF_BINS: usize = 1;
-const GAMMA: f64 = 100.0;
+const GAMMA: f64 = 10.0;
 
 fn main() {
 	let post_process_data = false;
 	match current_dir() {
 		Ok(directory) => {
-			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 3000, 500_000, 20.0, 1000.0, false, directory);
+			let mut pathtracer = Pathtracer::new(1000, 1000, 0, 8, false, vec![(0.2, 0)], 15, 1_000, 500_000, 10.0, 1000.0, false, directory);
 			if post_process_data {
 				pathtracer.post_process_data();
 			} else {

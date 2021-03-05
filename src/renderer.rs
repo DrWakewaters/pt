@@ -9,6 +9,7 @@ use crate::ray::Ray;
 use crate::renderershape::RendererShape;
 use crate::rendereroutputpixel::RendererOutputPixel;
 use crate::rendererscene::RendererScene;
+use crate::renderertype::RendererType;
 
 use crate::NUMBER_OF_BINS;
 
@@ -110,12 +111,9 @@ impl Renderer {
 			};
 			if error < self.maximum_error || iterations*self.spp_per_iteration >= self.maximum_spp {
 				converged = true;
-			} else if iterations%50 == 0 {
+			} else if iterations%10 == 0 {
 				println!("Currently: {} iterations at ({}, {}) with an error of {}. Iterating until it is less than {}.", iterations, x, y, error, self.maximum_error);
 			}
-		}
-		if x == self.width/2 {
-			println!("Iterations needed at ({}, {}): {}.", x, y, iterations);
 		}
 	}
 
@@ -271,33 +269,51 @@ impl Renderer {
 	fn closest_renderer_shape(&self, ray: &mut Ray) -> Option<Hitpoint>  {
 		let mut min_distance = f64::MAX;
 		let mut closest_renderer_shape_index: Option<usize> = None;
-		let mut closest_is_a_sphere = true;
+		let mut renderer_type = RendererType::Cylinder;
+		for (i, cylinder) in self.scene.renderer_cylinders.iter().enumerate() {
+			if !cylinder.active {
+				continue;
+			}
+			let distance = cylinder.distance(&ray);
+			if distance < min_distance {
+				min_distance = distance;
+				closest_renderer_shape_index = Some(i);
+			}
+		}
 		for (i, sphere) in self.scene.renderer_spheres.iter().enumerate() {
+			if !sphere.active {
+				continue;
+			}
 			let distance = sphere.distance(&ray);
 			if distance < min_distance {
 				min_distance = distance;
 				closest_renderer_shape_index = Some(i);
+				renderer_type = RendererType::Sphere;
 			}
 		}
 		for (i, triangle) in self.scene.renderer_triangles.iter().enumerate() {
+			if !triangle.active {
+				continue;
+			}
 			let distance = triangle.distance(&ray);
 			if distance < min_distance {
 				min_distance = distance;
 				closest_renderer_shape_index = Some(i);
-				closest_is_a_sphere = false;
+				renderer_type = RendererType::Triangle;
 			}
 		}
 		if let Some(index) = closest_renderer_shape_index {
 			let position = add(ray.position, mul(min_distance, ray.direction));
-			let normal = if closest_is_a_sphere {
-				self.scene.renderer_spheres[index].normal(position)
-			} else {
-				self.scene.renderer_triangles[index].normal(position)
-			};
-			let material = if closest_is_a_sphere {
-				self.scene.renderer_spheres[index].material()
-			} else {
-				self.scene.renderer_triangles[index].material()
+			let (normal, material) = match renderer_type {
+				RendererType::Cylinder => {
+					(self.scene.renderer_cylinders[index].normal(position), self.scene.renderer_cylinders[index].material())
+				}
+				RendererType::Sphere => {
+					(self.scene.renderer_spheres[index].normal(position), self.scene.renderer_spheres[index].material())
+				}
+				RendererType::Triangle => {
+					(self.scene.renderer_triangles[index].normal(position), self.scene.renderer_triangles[index].material())
+				}
 			};
 			let hit_from_outside = dot(ray.direction, normal) < 0.0;
 			Some(Hitpoint::new(position, ray.direction, min_distance, normal, material, hit_from_outside, false, [0.0, 0.0, 0.0]))

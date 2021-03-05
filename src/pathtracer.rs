@@ -70,7 +70,7 @@ impl Pathtracer {
 
 	pub fn render_images_to_png(&mut self) {
 		// Either start from an already created, stored scene, or create a new one.
-		let mut physics_scene = PhysicsScene::new();
+		let mut physics_scene = PhysicsScene::new(1.0);
 		if self.continue_old_simulation {
 			self.read_old_physics_scene(&mut physics_scene);
 		} else {
@@ -96,6 +96,7 @@ impl Pathtracer {
 				}
 			}
 			//self.simulate_physics(&mut physics_scene);
+			self.simulate_physics_beat_saber(&mut physics_scene);
 			self.frame_number += 1;
 		}
 	}
@@ -217,6 +218,16 @@ impl Pathtracer {
 		print!("Simulating starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);
 		let _ = stdout().flush();
 		physics_scene.simulate_physics();
+		let duration = now() - tm;
+		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
+	}
+
+	#[allow(dead_code)]
+	fn simulate_physics_beat_saber(&self, physics_scene: &mut PhysicsScene) {
+		let tm = now();
+		print!("Simulating starts at {}:{}:{}.{}. ", tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_nsec/10_000_000);
+		let _ = stdout().flush();
+		physics_scene.simulate_physics_beat_saber();
 		let duration = now() - tm;
 		println!("It took {}:{}:{}.{}.", duration.num_hours(), duration.num_minutes()%60, duration.num_seconds()%60, (duration.num_milliseconds()%1000)/10);
 	}

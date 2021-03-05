@@ -13,11 +13,13 @@ pub struct PhysicsTriangle {
 	pub e2: [f64; 3],
 	pub normal: [f64; 3],
 	pub material: Material,
-	physics: Physics,
+	pub physics: Physics,
+	pub id: i64,
+	pub active: bool
 }
 
 impl PhysicsTriangle {
-	pub fn new(nodes: &[[f64; 3]], indices: [usize; 3], material: Material, physics: Physics) -> Self {
+	pub fn new(nodes: &[[f64; 3]], indices: [usize; 3], material: Material, physics: Physics, id: i64, active: bool) -> Self {
 		let e1 = sub(nodes[indices[1]], nodes[indices[0]]);
 		let e2 = sub(nodes[indices[2]], nodes[indices[0]]);
 		let normal = normalised(cross(sub(nodes[indices[1]], nodes[indices[0]]), sub(nodes[indices[2]], nodes[indices[0]])));
@@ -30,6 +32,8 @@ impl PhysicsTriangle {
 			normal,
 			material,
 			physics,
+			id,
+			active
 		}
 	}
 }

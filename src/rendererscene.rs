@@ -3,12 +3,14 @@ use serde_derive::{Serialize, Deserialize};
 use crate::camera::Camera;
 use crate::lightsphere::LightSphere;
 use crate::physicsscene::PhysicsScene;
+use crate::renderercylinder::RendererCylinder;
 use crate::renderersphere::RendererSphere;
 use crate::renderertriangle::RendererTriangle;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RendererScene {
 	pub light_spheres: Vec<LightSphere>,
+	pub renderer_cylinders: Vec<RendererCylinder>,
 	pub renderer_spheres: Vec<RendererSphere>,
 	pub renderer_triangles: Vec<RendererTriangle>,
 	pub cameras: Vec<Camera>
@@ -19,6 +21,10 @@ impl RendererScene {
 		let mut light_spheres: Vec<LightSphere> = Vec::new();
 		for light_sphere in physics_scene.light_spheres {
 			light_spheres.push(light_sphere);
+		}
+		let mut renderer_cylinders: Vec<RendererCylinder> = Vec::new();
+		for physics_cylinder in physics_scene.physics_cylinders {
+			renderer_cylinders.push(RendererCylinder::new(&physics_cylinder));
 		}
 		let mut renderer_spheres: Vec<RendererSphere> = Vec::new();
 		for physics_sphere in physics_scene.physics_spheres {
@@ -34,6 +40,7 @@ impl RendererScene {
 		}
 		Self {
 			light_spheres,
+			renderer_cylinders,
 			renderer_spheres,
 			renderer_triangles,
 			cameras,
